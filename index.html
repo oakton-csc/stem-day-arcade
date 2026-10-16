@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STEM Day Arcade</title>
+<meta name="description" content="Browser games built by members of the Oakton College Computer Science Club for STEM Day.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+  /* Light: engineering notebook paper. Dark: blueprint. */
+  :root {
+    --paper: #eef4f6;
+    --grid: #d3e3ea;
+    --grid-major: #b9d0db;
+    --ink: #1c2b45;
+    --ink-soft: #4a5b78;
+    --card: #ffffff;
+    --card-edge: #c3d5df;
+    --marker: #ffe14d;
+    --marker-ink: #1c2b45;
+    --link: #2c4fa3;
+    --chip: #ffffff;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #12365f;
+      --grid: rgba(255, 255, 255, .06);
+      --grid-major: rgba(255, 255, 255, .13);
+      --ink: #e8f0fb;
+      --ink-soft: #a9bfdc;
+      --card: #184374;
+      --card-edge: #2a5a91;
+      --marker: #ffe14d;
+      --marker-ink: #13253f;
+      --link: #9cc2ff;
+      --chip: #184374;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #12365f;
+    --grid: rgba(255, 255, 255, .06);
+    --grid-major: rgba(255, 255, 255, .13);
+    --ink: #e8f0fb;
+    --ink-soft: #a9bfdc;
+    --card: #184374;
+    --card-edge: #2a5a91;
+    --marker: #ffe14d;
+    --marker-ink: #13253f;
+    --link: #9cc2ff;
+    --chip: #184374;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh;
+    background-color: var(--paper);
+    background-image:
+      linear-gradient(var(--grid-major) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+    color: var(--ink);
+    font: 18px/1.5 "Atkinson Hyperlegible", system-ui, sans-serif;
+  }
+  a { color: var(--link); }
+  .wrap { width: min(1120px, 100%); margin: 0 auto; padding: 0 16px; }
+
+  header { padding: 56px 0 32px; }
+  h1 {
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    font-weight: 800;
+    font-size: clamp(2.6rem, 9vw, 5.5rem);
+    line-height: .95;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  h1 span {
+    background: var(--marker);
+    color: var(--marker-ink);
+    padding: 0 .12em;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    transform: rotate(-1deg);
+    display: inline-block;
+  }
+  .intro { max-width: 34em; color: var(--ink-soft); font-size: 1.15rem; margin: 20px 0 0; }
+
+  .tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 24px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    appearance: none; font: inherit; font-size: .95rem; cursor: pointer;
+    background: var(--chip); color: var(--ink);
+    border: 1.5px solid var(--card-edge); border-radius: 999px;
+    padding: 6px 14px;
+  }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .search {
+    margin-left: auto; font: inherit; font-size: 1rem;
+    background: var(--chip); color: var(--ink);
+    border: 1.5px solid var(--card-edge); border-radius: 999px;
+    padding: 8px 16px; min-width: 0; width: 240px;
+  }
+  .search::placeholder { color: var(--ink-soft); }
+
+  .grid {
+    display: grid; gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    padding-bottom: 48px;
+  }
+  .game {
+    appearance: none; font: inherit; color: inherit; text-align: left; cursor: pointer;
+    background: var(--card);
+    border: 1.5px solid var(--card-edge);
+    border-radius: 6px;
+    padding: 0; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .game:hover .cover { filter: saturate(1.15); }
+  .game:active { transform: translateY(1px); }
+  .cover {
+    aspect-ratio: 16 / 10; width: 100%;
+    background: var(--ink); display: block; object-fit: cover;
+  }
+  .cover.generated { display: grid; place-items: center; }
+  .cover.generated svg { width: 100%; height: 100%; }
+  .meta { padding: 14px 16px 18px; display: grid; gap: 4px; }
+  .meta .title {
+    display: block;
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    font-size: 1.35rem; line-height: 1.15; margin: 0;
+  }
+  .by { color: var(--ink-soft); font-size: .95rem; }
+  .desc { margin: 6px 0 0; font-size: 1rem; }
+
+  .empty { padding: 48px 0; max-width: 34em; }
+  .empty h2 { font-family: "Bricolage Grotesque", system-ui, sans-serif; margin: 0 0 8px; }
+
+  footer { border-top: 1.5px solid var(--card-edge); padding: 24px 0 40px; color: var(--ink-soft); font-size: .95rem; }
+
+  /* Play view */
+  .player {
+    position: fixed; inset: 0; z-index: 10;
+    background: #0a1426; display: grid; grid-template-rows: auto 1fr;
+  }
+  .player[hidden] { display: none; }
+  .bar {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 10px 16px; background: var(--marker); color: var(--marker-ink);
+  }
+  .back {
+    appearance: none; font: inherit; font-weight: 700; cursor: pointer;
+    background: var(--marker-ink); color: var(--marker);
+    border: 0; border-radius: 999px; padding: 8px 18px;
+  }
+  .bar strong { font-family: "Bricolage Grotesque", system-ui, sans-serif; font-size: 1.2rem; }
+  .bar .controls { font-size: .95rem; margin-left: auto; }
+  .stage { position: relative; }
+  .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+
+  :focus-visible { outline: 3px solid var(--link); outline-offset: 3px; }
+  .back:focus-visible { outline-color: var(--marker-ink); }
+
+  @media (max-width: 640px) {
+    header { padding-top: 32px; }
+    .search { margin-left: 0; width: 100%; }
+    .bar .controls { margin-left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span>STEM Day Arcade</span></h1>
+    <p class="intro">Every game here was built by a member of the Oakton College Computer Science Club. Pick one and play; most take less than a minute to learn.</p>
+  </header>
+
+  <div class="tools" id="tools" hidden>
+    <div class="chips" id="chips" role="group" aria-label="Filter by subject"></div>
+    <input class="search" id="search" type="search" placeholder="Search games or makers" aria-label="Search games or makers">
+  </div>
+
+  <main id="grid" class="grid" aria-live="polite"></main>
+
+  <footer>
+    Built a game? Add it to the arcade by following the
+    <a href="https://github.com/oakton-csc/stem-day-arcade/blob/main/CONTRIBUTING.md">contributing guide</a>.
+  </footer>
+</div>
+
+<div class="player" id="player" hidden>
+  <div class="bar">
+    <button class="back" id="back">Back to games</button>
+    <div><strong id="p-title"></strong> <span id="p-by"></span></div>
+    <div class="controls" id="p-controls"></div>
+  </div>
+  <div class="stage" id="stage"></div>
+</div>
+
+<script>
+  const grid = document.getElementById("grid");
+  const chipsEl = document.getElementById("chips");
+  const searchEl = document.getElementById("search");
+  const player = document.getElementById("player");
+  const stage = document.getElementById("stage");
+
+  let games = [];
+  let activeTag = "all";
+  let openedHere = false; // true when the game was opened from this page, so Back can use browser history
+  let lastSlug = null;
+
+  // A cover for games without a thumbnail: the title hashed into a grid of bits.
+  function coverSvg(text) {
+    let h = 2166136261;
+    for (const c of text) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+    const hues = [48, 200, 150, 12, 280];
+    const hue = hues[Math.abs(h) % hues.length];
+    let cells = "";
+    const cols = 16, rows = 10;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        h ^= (x + 1) * 374761393 + (y + 1) * 668265263;
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        if ((h >>> 28) % 3 === 0) {
+          cells += `<rect x="${x * 10 + 1}" y="${y * 10 + 1}" width="8" height="8" rx="1.5" fill="hsl(${hue} 90% 62%)" opacity="${0.45 + ((h >>> 20) % 6) / 10}"/>`;
+        }
+      }
+    }
+    return `<svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="160" height="100" fill="hsl(${hue} 45% 16%)"/>${cells}</svg>`;
+  }
+
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function renderChips() {
+    const tags = [...new Set(games.flatMap((g) => g.tags))].sort();
+    chipsEl.innerHTML = "";
+    for (const tag of ["all", ...tags]) {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.textContent = tag === "all" ? "All games" : tag;
+      b.setAttribute("aria-pressed", String(tag === activeTag));
+      b.addEventListener("click", () => { activeTag = tag; renderChips(); renderGrid(); });
+      chipsEl.appendChild(b);
+    }
+  }
+
+  function renderGrid() {
+    const q = searchEl.value.trim().toLowerCase();
+    const shown = games.filter((g) =>
+      (activeTag === "all" || g.tags.includes(activeTag)) &&
+      (!q || `${g.title} ${g.author} ${g.description}`.toLowerCase().includes(q))
+    );
+    if (!shown.length) {
+      grid.innerHTML = `<div class="empty"><h2>No games match</h2><p>Try a different subject or clear the search box.</p></div>`;
+      return;
+    }
+    grid.innerHTML = shown.map((g) => `
+      <button class="game" data-slug="${esc(g.slug)}">
+        ${g.thumbnail
+          ? `<img class="cover" src="${esc(g.thumbnail)}" alt="" loading="lazy">`
+          : `<span class="cover generated">${coverSvg(g.title)}</span>`}
+        <span class="meta">
+          <span class="title">${esc(g.title)}</span>
+          <span class="by">by ${esc(g.author)}</span>
+          <span class="desc">${esc(g.description)}</span>
+        </span>
+      </button>`).join("");
+  }
+
+  grid.addEventListener("click", (e) => {
+    const card = e.target.closest(".game");
+    if (card) { openedHere = true; location.hash = "play/" + card.dataset.slug; }
+  });
+
+  function route() {
+    const m = location.hash.match(/^#play\/([a-z0-9-]+)$/);
+    const game = m && games.find((g) => g.slug === m[1]);
+    if (game) {
+      document.getElementById("p-title").textContent = game.title;
+      document.getElementById("p-by").textContent = "by " + game.author;
+      document.getElementById("p-controls").textContent = game.controls;
+      document.title = game.title + " | STEM Day Arcade";
+      // A fresh iframe each time keeps game pages out of the browser history,
+      // so "Back to games" and the browser's back button both return here.
+      if (lastSlug !== game.slug) {
+        const frame = document.createElement("iframe");
+        frame.title = game.title;
+        frame.allow = "fullscreen; autoplay";
+        frame.src = game.path;
+        frame.onload = () => frame.focus();
+        stage.replaceChildren(frame);
+        lastSlug = game.slug;
+      }
+      player.hidden = false;
+      document.body.style.overflow = "hidden";
+      stage.firstElementChild?.focus();
+    } else {
+      const wasOpen = lastSlug;
+      player.hidden = true;
+      stage.replaceChildren();
+      lastSlug = null;
+      document.body.style.overflow = "";
+      if (wasOpen) grid.querySelector(`[data-slug="${wasOpen}"]`)?.focus();
+      document.title = "STEM Day Arcade";
+    }
+  }
+
+  document.getElementById("back").addEventListener("click", () => {
+    if (openedHere) { openedHere = false; history.back(); }
+    else { history.replaceState(null, "", location.pathname + location.search); route(); }
+  });
+  window.addEventListener("hashchange", route);
+  searchEl.addEventListener("input", renderGrid);
+
+  fetch("games.json", { cache: "no-store" })
+    .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then((list) => {
+      games = list;
+      if (!games.length) {
+        grid.innerHTML = `<div class="empty"><h2>No games yet</h2><p>Be the first: follow the <a href="https://github.com/oakton-csc/stem-day-arcade/blob/main/CONTRIBUTING.md">contributing guide</a> to add a game.</p></div>`;
+        return;
+      }
+      document.getElementById("tools").hidden = false;
+      renderChips();
+      renderGrid();
+      route();
+    })
+    .catch(() => {
+      grid.innerHTML = `<div class="empty"><h2>The game list didn't load</h2><p>If you opened this file straight from your computer, run <code>node scripts/build-manifest.mjs</code> and then <code>npx serve</code> in the project folder, and open the address it prints.</p></div>`;
+    });
+</script>
+</body>
+</html>

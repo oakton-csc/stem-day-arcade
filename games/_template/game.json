@@ -1,0 +1,8 @@
+{
+  "title": "My Game Name",
+  "author": "Your Name",
+  "github": "your-github-username",
+  "description": "One sentence a visitor reads to decide whether to play (under 160 characters).",
+  "controls": "Arrow keys to move, Space to jump.",
+  "tags": ["physics"]
+}

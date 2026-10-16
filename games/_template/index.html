@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Game Name</title>
+<style>
+  /* Everything for your game lives in this folder.
+     Keep styles, scripts and images here, and link them with relative paths
+     like "sprites/ship.png", never "/sprites/ship.png". */
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: #111a2b;
+    color: #f2f5fa;
+    font: 18px/1.4 system-ui, sans-serif;
+    display: grid;
+    place-items: center;
+  }
+  canvas { background: #0b1220; border-radius: 8px; max-width: 100%; }
+</style>
+</head>
+<body>
+<main>
+  <h1>My Game Name</h1>
+  <p>Tell players how to play in one line.</p>
+  <canvas id="game" width="640" height="400"></canvas>
+</main>
+
+<script>
+  // Replace everything below with your game.
+  // Rules: no logins, no installs, no outside websites or APIs,
+  // and a visitor should understand it within about 2 minutes.
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  let x = 40, dx = 3;
+  function frame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#ffd84d";
+    ctx.beginPath();
+    ctx.arc(x, canvas.height / 2, 16, 0, Math.PI * 2);
+    ctx.fill();
+    x += dx;
+    if (x < 16 || x > canvas.width - 16) dx = -dx;
+    requestAnimationFrame(frame);
+  }
+  frame();
+</script>
+</body>
+</html>

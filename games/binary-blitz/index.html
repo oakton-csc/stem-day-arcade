@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Binary Blitz</title>
+<style>
+  :root {
+    --bg: #0f2747;
+    --panel: #163560;
+    --ink: #eaf2ff;
+    --dim: #9db4d6;
+    --on: #ffd84d;
+    --off: #22477a;
+    --good: #5be39a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 18px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+  }
+  main { width: min(720px, 100%); text-align: center; }
+  h1 { font-size: 2rem; margin: 0 0 4px; letter-spacing: 0.02em; }
+  .hud { display: flex; justify-content: space-between; color: var(--dim); margin: 16px 4px; font-variant-numeric: tabular-nums; }
+  .hud b { color: var(--ink); font-size: 1.4rem; }
+  .target { font-size: clamp(4rem, 18vw, 8rem); font-weight: 800; line-height: 1; margin: 8px 0 4px; font-variant-numeric: tabular-nums; transition: color .15s; }
+  .target.hit { color: var(--good); }
+  .current { color: var(--dim); margin-bottom: 20px; font-variant-numeric: tabular-nums; }
+  .bits { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  .bit {
+    appearance: none; border: 0; border-radius: 10px;
+    background: var(--off); color: var(--ink);
+    font: inherit; font-size: clamp(1.4rem, 6vw, 2.4rem); font-weight: 800;
+    aspect-ratio: 3 / 4; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    transition: background .08s, transform .08s;
+  }
+  .bit small { font-size: clamp(.7rem, 1.6vw, .95rem); font-weight: 600; color: var(--dim); }
+  .bit kbd { font-size: clamp(.6rem, 1.3vw, .8rem); font-family: inherit; color: var(--dim); opacity: .8; }
+  .bit[aria-pressed="true"] { background: var(--on); color: #1a1a1a; }
+  .bit[aria-pressed="true"] small, .bit[aria-pressed="true"] kbd { color: #4a3c00; }
+  .bit:active { transform: scale(.96); }
+  .bit:focus-visible, .btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(10, 25, 48, .92);
+    display: grid; place-items: center; padding: 16px; text-align: center;
+  }
+  .overlay[hidden] { display: none; }
+  .card { max-width: 460px; }
+  .card p { color: var(--dim); }
+  .btn {
+    appearance: none; border: 0; border-radius: 999px; cursor: pointer;
+    background: var(--on); color: #1a1a1a; font: inherit; font-weight: 700;
+    padding: 14px 32px; font-size: 1.1rem; margin-top: 8px;
+  }
+  .big { font-size: 4rem; font-weight: 800; margin: 0; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Binary Blitz</h1>
+  <div class="hud">
+    <span>Score <b id="score">0</b></span>
+    <span>Time <b id="time">60</b></span>
+  </div>
+  <div class="target" id="target" aria-live="polite">0</div>
+  <div class="current">Your bits make <span id="current">0</span></div>
+  <div class="bits" id="bits"></div>
+</main>
+
+<div class="overlay" id="start">
+  <div class="card">
+    <h1>Binary Blitz</h1>
+    <p>Computers store every number as bits: switches that are on (1) or off (0). Each switch is worth a power of two. Turn on the right switches so they add up to the big number.</p>
+    <p>Click a switch or press 1–8. Enter skips a number but costs 3 seconds. You have 60 seconds.</p>
+    <button class="btn" id="play">Start</button>
+  </div>
+</div>
+
+<div class="overlay" id="end" hidden>
+  <div class="card">
+    <p>Numbers built</p>
+    <p class="big" id="final">0</p>
+    <p id="best"></p>
+    <button class="btn" id="again">Play again</button>
+  </div>
+</div>
+
+<script>
+  const VALUES = [128, 64, 32, 16, 8, 4, 2, 1];
+  const ROUND_SECONDS = 60;
+  const SKIP_PENALTY = 3;
+
+  const bitsEl = document.getElementById("bits");
+  const targetEl = document.getElementById("target");
+  const currentEl = document.getElementById("current");
+  const scoreEl = document.getElementById("score");
+  const timeEl = document.getElementById("time");
+  const startEl = document.getElementById("start");
+  const endEl = document.getElementById("end");
+
+  let bits = new Array(8).fill(false);
+  let target = 0, score = 0, timeLeft = ROUND_SECONDS, timer = null, playing = false;
+
+  const buttons = VALUES.map((value, i) => {
+    const b = document.createElement("button");
+    b.className = "bit";
+    b.setAttribute("aria-pressed", "false");
+    b.setAttribute("aria-label", `Bit worth ${value}`);
+    b.innerHTML = `<span>0</span><small>${value}</small><kbd>${i + 1}</kbd>`;
+    b.addEventListener("click", () => flip(i));
+    bitsEl.appendChild(b);
+    return b;
+  });
+
+  function value() {
+    return bits.reduce((sum, on, i) => sum + (on ? VALUES[i] : 0), 0);
+  }
+
+  // Start with small numbers, then open up the full 8-bit range as the score climbs.
+  function newTarget() {
+    const max = score < 4 ? 15 : score < 10 ? 63 : 255;
+    let t;
+    do { t = 1 + Math.floor(Math.random() * max); } while (t === target);
+    target = t;
+    targetEl.textContent = target;
+  }
+
+  function render() {
+    bits.forEach((on, i) => {
+      buttons[i].setAttribute("aria-pressed", String(on));
+      buttons[i].firstElementChild.textContent = on ? "1" : "0";
+    });
+    currentEl.textContent = value();
+    scoreEl.textContent = score;
+    timeEl.textContent = timeLeft;
+  }
+
+  function clearBits() { bits = new Array(8).fill(false); }
+
+  function flip(i) {
+    if (!playing) return;
+    bits[i] = !bits[i];
+    if (value() === target) {
+      score++;
+      targetEl.classList.add("hit");
+      setTimeout(() => targetEl.classList.remove("hit"), 200);
+      clearBits();
+      newTarget();
+    }
+    render();
+  }
+
+  function skip() {
+    if (!playing) return;
+    timeLeft = Math.max(0, timeLeft - SKIP_PENALTY);
+    clearBits();
+    newTarget();
+    render();
+    if (timeLeft === 0) finish();
+  }
+
+  function start() {
+    score = 0; timeLeft = ROUND_SECONDS; target = 0;
+    clearBits(); newTarget(); render();
+    startEl.hidden = true; endEl.hidden = true;
+    playing = true;
+    buttons[0].focus();
+    clearInterval(timer);
+    timer = setInterval(() => {
+      timeLeft--;
+      render();
+      if (timeLeft <= 0) finish();
+    }, 1000);
+  }
+
+  function finish() {
+    playing = false;
+    clearInterval(timer);
+    let best = score;
+    try {
+      best = Math.max(score, Number(localStorage.getItem("binary-blitz-best")) || 0);
+      localStorage.setItem("binary-blitz-best", String(best));
+    } catch (e) { /* storage unavailable; skip the high score */ }
+    document.getElementById("final").textContent = score;
+    document.getElementById("best").textContent = `Best on this computer: ${best}`;
+    endEl.hidden = false;
+    document.getElementById("again").focus();
+  }
+
+  document.getElementById("play").addEventListener("click", start);
+  document.getElementById("again").addEventListener("click", start);
+
+  document.addEventListener("keydown", (e) => {
+    if (!playing) {
+      if ((e.key === "Enter" || e.key === " ") && document.activeElement?.tagName !== "BUTTON") start();
+      return;
+    }
+    if (e.key >= "1" && e.key <= "8") { flip(Number(e.key) - 1); e.preventDefault(); }
+    else if (e.key === "Enter") { skip(); e.preventDefault(); }
+  });
+
+  document.getElementById("play").focus();
+</script>
+</body>
+</html>
