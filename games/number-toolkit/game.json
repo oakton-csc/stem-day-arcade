@@ -1,0 +1,8 @@
+{
+  "title": "Number Analysis Toolkit",
+  "author": "Leo",
+  "description": "A retro console that checks primes, finds factorials and digital roots, converts temperatures and simulates logic gates.",
+  "controls": "Type a menu number and press Enter, then answer the questions.",
+  "tags": ["math", "computer engineering"],
+  "thumbnail": "thumbnail.png"
+}

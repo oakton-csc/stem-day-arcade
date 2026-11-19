@@ -10,11 +10,14 @@ Browser games built by members of the Oakton College Computer Science Club, play
 
 - Each game lives in its own folder under `games/`, with an `index.html` and a `game.json` describing it.
 - `scripts/build-manifest.mjs` reads every `game.json`, checks it, and writes `games.json`.
-- The arcade page (`index.html`) loads `games.json` and shows every game as a card. Clicking a card opens the game full-screen with a "Back to games" button.
+- The arcade page (`index.html`) loads `games.json`, features the first games and lists every game in the line-up. Clicking one opens it full-screen with a "Back to games" button.
+- Animation is on by default and follows the visitor's reduced-motion setting; the Motion button turns it off or on. Without internet the page still works, with plain scrolling and no QR code.
 - A GitHub Action runs the check on every pull request, and publishes the site to GitHub Pages whenever something is merged into `main`.
 
 ```
 index.html                 the arcade page
+concept-1/                 the previous design of the arcade page
+assets/                    pictures used on the arcade page (credits in credits.json)
 games/
   _template/               copy this to start a new game
   binary-blitz/            sample game

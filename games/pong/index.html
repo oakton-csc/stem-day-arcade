@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pong</title>
+<style>
+  /* Browser version of Pavlo's pygame Pong (pong.py in this folder).
+     Same window, colours, speeds and menus; the canvas resizes like his RESIZABLE window. */
+  html, body { margin: 0; height: 100%; overflow: hidden; background: rgb(34, 110, 63); }
+  body { touch-action: none; -webkit-user-select: none; user-select: none; }
+  canvas { display: block; width: 100vw; height: 100vh; outline: none; }
+</style>
+</head>
+<body>
+<canvas id="screen" tabindex="0" aria-label="Pong. Press 1 to play the computer or 2 for two players."></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById('screen'), g = canvas.getContext('2d');
+  const touch = 'ontouchstart' in window || matchMedia('(pointer: coarse)').matches;
+
+  // Simple rectangles, like pygame.Rect
+  class Rect {
+    constructor(x, y, w, h) { this.x = x; this.y = y; this.w = w; this.h = h; }
+    get top() { return this.y; } set top(v) { this.y = v; }
+    get bottom() { return this.y + this.h; } set bottom(v) { this.y = v - this.h; }
+    get left() { return this.x; } set left(v) { this.x = v; }
+    get right() { return this.x + this.w; } set right(v) { this.x = v - this.w; }
+    get center() { return [this.x + this.w / 2, this.y + this.h / 2]; }
+    set center([cx, cy]) { this.x = cx - this.w / 2; this.y = cy - this.h / 2; }
+    colliderect(o) { return this.x < o.x + o.w && o.x < this.x + this.w && this.y < o.y + o.h && o.y < this.y + this.h; }
+    collidepoint([px, py]) { return px >= this.x && px < this.x + this.w && py >= this.y && py < this.y + this.h; }
+    clamp() { this.y = Math.max(0, Math.min(screen_height - this.h, this.y)); this.x = Math.max(0, Math.min(screen_width - this.w, this.x)); }
+  }
+  const choice = (a) => a[Math.floor(Math.random() * a.length)];
+
+  // ---- window: starts at 640 x 480 in pygame, here it is the size of the page and follows resizes
+  let screen_width = 640, screen_height = 480, dpr = 1;
+  function fit() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    screen_width = Math.round(innerWidth); screen_height = Math.round(innerHeight);
+    canvas.width = screen_width * dpr; canvas.height = screen_height * dpr;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // ---- game rectangles and colours, as in pong.py
+  const black = 'rgb(44, 47, 46)', white = 'rgb(244, 245, 245)', green = 'rgb(34, 110, 63)';
+  fit();
+  const ball = new Rect(screen_width / 2 - 15, screen_height / 2 - 15, 30, 30);
+  const player = new Rect(screen_width - 20, screen_height / 2 - 70, 10, 140);
+  const opponent = new Rect(10, screen_height / 2 - 70, 10, 140);
+  let ball_speed_x = 7 * choice([1, -1]), ball_speed_y = 7 * choice([1, -1]);
+  let player_speed = 0;
+  const opponent_speed = 7;
+  let player_score = 0, opponent_score = 0;
+  const menu_button = new Rect(0, 0, 110, 34);
+  const self_play_button = new Rect(0, 0, 220, 54), one_v_one_button = new Rect(0, 0, 220, 54);
+  const restart_button = new Rect(0, 0, 220, 48), resume_button = new Rect(0, 0, 220, 48);
+  let game_mode = null, menu_active = true;
+  menu_button.center = [screen_width / 2, 30];
+
+  addEventListener('resize', () => {   // pygame.VIDEORESIZE
+    fit();
+    player.right = screen_width - 10;
+    menu_button.center = [Math.floor(screen_width / 2), 30];
+  });
+
+  // ---- Pavlo's functions
+  function ball_animation() {
+    ball.x += ball_speed_x; ball.y += ball_speed_y;
+    if (ball.top <= 0 || ball.bottom >= screen_height) ball_speed_y *= -1;
+    if (ball.left <= 0) { player_score += 1; ball_restart(); }
+    else if (ball.right >= screen_width) { opponent_score += 1; ball_restart(); }
+    if (ball.colliderect(player) || ball.colliderect(opponent)) ball_speed_x *= -1;
+  }
+  function player_animation() {
+    player.y += player_speed;
+    if (player.top <= 0) player.top = 0;
+    if (player.bottom >= screen_height) player.bottom = screen_height;
+  }
+  function opponent_ai() {
+    if (opponent.top < ball.y) opponent.top += opponent_speed;
+    if (opponent.bottom >= ball.y) opponent.bottom -= opponent_speed;
+    if (opponent.top <= 0) opponent.top = 0;
+    if (opponent.bottom >= screen_height) opponent.bottom = screen_height;
+  }
+  function opponent_animation() {
+    if (keys.has('KeyW')) opponent.y -= 7;
+    if (keys.has('KeyS')) opponent.y += 7;
+    opponent.clamp();
+  }
+  function ball_restart() {
+    ball.center = [screen_width / 2, screen_height / 2];
+    ball_speed_y *= choice([1, -1]);
+    ball_speed_x *= choice([1, -1]);
+  }
+  function restart_game() {
+    ball.center = [Math.floor(screen_width / 2), Math.floor(screen_height / 2)];
+    player.center = [screen_width - 15, Math.floor(screen_height / 2)];
+    opponent.center = [15, Math.floor(screen_height / 2)];
+    ball_speed_x = 7 * choice([1, -1]); ball_speed_y = 7 * choice([1, -1]);
+    player_speed = 0; player_score = 0; opponent_score = 0;
+  }
+
+  // ---- input
+  const keys = new Set();
+  addEventListener('keydown', (e) => {
+    if (e.repeat) { keys.add(e.code); return; }
+    keys.add(e.code);
+    if (menu_active) {
+      if (e.code === 'Digit1' || e.code === 'Numpad1') { game_mode = 'selfplay'; menu_active = false; restart_game(); }
+      else if (e.code === 'Digit2' || e.code === 'Numpad2') { game_mode = '1v1'; menu_active = false; restart_game(); }
+      else if (game_mode !== null && e.code === 'KeyR') { menu_active = false; restart_game(); }
+      else if (game_mode !== null && e.code === 'Escape') { menu_active = false; }
+    } else {
+      if (e.code === 'KeyM') { menu_active = true; player_speed = 0; }
+      else if (e.code === 'ArrowDown') { player_speed += 7; e.preventDefault(); }
+      else if (e.code === 'ArrowUp') { player_speed -= 7; e.preventDefault(); }
+    }
+  });
+  addEventListener('keyup', (e) => {
+    keys.delete(e.code);
+    if (!menu_active) {
+      if (e.code === 'ArrowDown') player_speed -= 7;
+      else if (e.code === 'ArrowUp') player_speed += 7;
+    }
+  });
+  // leaving the window releases the keys, so a paddle never keeps sliding on its own
+  addEventListener('blur', () => { keys.clear(); player_speed = 0; });
+
+  function clicked(pos) {
+    if (menu_active) {
+      if (self_play_button.collidepoint(pos)) { game_mode = 'selfplay'; menu_active = false; restart_game(); }
+      else if (one_v_one_button.collidepoint(pos)) { game_mode = '1v1'; menu_active = false; restart_game(); }
+      else if (game_mode !== null && restart_button.collidepoint(pos)) { menu_active = false; restart_game(); }
+      else if (game_mode !== null && resume_button.collidepoint(pos)) { menu_active = false; }
+      return true;
+    }
+    menu_button.center = [Math.floor(screen_width / 2), 30];
+    if (menu_button.collidepoint(pos)) { menu_active = true; player_speed = 0; return true; }
+    return false;
+  }
+  // Phones and tablets: drag a finger on your half of the court to move your paddle
+  const drags = new Map();
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.focus({ preventScroll: true });
+    const pos = [e.clientX, e.clientY];
+    if (e.button === 0 && clicked(pos)) return;
+    if (e.pointerType !== 'mouse') { drags.set(e.pointerId, e.clientX > screen_width / 2 ? 'player' : 'opponent'); dragTo(e); }
+  });
+  canvas.addEventListener('pointermove', (e) => { if (drags.has(e.pointerId)) dragTo(e); });
+  const lift = (e) => drags.delete(e.pointerId);
+  canvas.addEventListener('pointerup', lift); canvas.addEventListener('pointercancel', lift);
+  function dragTo(e) {
+    const side = drags.get(e.pointerId);
+    if (side === 'player') { player.center = [player.center[0], e.clientY]; player_animation(); }
+    else if (side === 'opponent' && game_mode === '1v1') { opponent.center = [opponent.center[0], e.clientY]; opponent.clamp(); }
+  }
+
+  // ---- drawing helpers: pygame's default font is a bold sans-serif
+  function font(size) { return `bold ${Math.round(size * 0.62)}px "Segoe UI", Arial, sans-serif`; }
+  function blitCentered(text, size, colour, [cx, cy]) { g.font = font(size); g.fillStyle = colour; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, cx, cy + 1); }
+  function roundRect(r, colour) { g.fillStyle = colour; g.beginPath(); g.roundRect(r.x, r.y, r.w, r.h, 4); g.fill(); }
+
+  // ---- the main loop, at 60 frames a second like clock.tick(60)
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    acc += Math.min(0.25, (now - last) / 1000); last = now;
+    while (acc >= 1 / 60) { step(); acc -= 1 / 60; }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  let frozen = false;
+  function step() {
+    if (menu_active || frozen) return;
+    ball_animation();
+    player_animation();
+    if (game_mode === 'selfplay') opponent_ai(); else opponent_animation();
+  }
+  function draw() {
+    const menu_center_x = Math.floor(screen_width / 2), menu_center_y = Math.floor(screen_height / 2);
+    self_play_button.center = [menu_center_x, menu_center_y - 38];
+    one_v_one_button.center = [menu_center_x, menu_center_y + 30];
+    restart_button.center = [menu_center_x, menu_center_y + 98];
+    resume_button.center = [menu_center_x, menu_center_y + 158];
+    g.fillStyle = green; g.fillRect(0, 0, screen_width, screen_height);
+    if (menu_active) {
+      blitCentered('PONG', 56, white, [menu_center_x, menu_center_y - 136]);
+      roundRect(self_play_button, white); roundRect(one_v_one_button, white);
+      blitCentered('VS CPU  (1)', 28, black, self_play_button.center);
+      blitCentered('1 VS 1  (2)', 28, black, one_v_one_button.center);
+      if (game_mode !== null) {
+        roundRect(restart_button, white); roundRect(resume_button, white);
+        blitCentered('RESTART  (R)', 28, black, restart_button.center);
+        blitCentered('RESUME  (ESC)', 28, black, resume_button.center);
+      }
+      g.font = '15px "Segoe UI", Arial, sans-serif'; g.fillStyle = white; g.textAlign = 'center';
+      g.fillText(touch ? 'Drag on your side of the court to move your paddle' : 'You are the right paddle: UP and DOWN arrows. Player 1 uses W and S.', menu_center_x, screen_height - 44);
+      g.fillText('by Pavlo', menu_center_x, screen_height - 22);
+    } else {
+      g.fillStyle = white; g.fillRect(player.x, player.y, player.w, player.h); g.fillRect(opponent.x, opponent.y, opponent.w, opponent.h);
+      g.strokeStyle = black; g.lineWidth = 1; g.beginPath(); g.moveTo(screen_width / 2, 0); g.lineTo(screen_width / 2, screen_height); g.stroke();
+      g.fillStyle = white; g.beginPath(); g.ellipse(ball.x + ball.w / 2, ball.y + ball.h / 2, ball.w / 2, ball.h / 2, 0, 0, Math.PI * 2); g.fill();
+      const opponent_name = game_mode === 'selfplay' ? 'CPU' : 'PLAYER 1', player_name = game_mode === 'selfplay' ? 'YOU' : 'PLAYER 2';
+      blitCentered(`${opponent_name}(${opponent_score})`, 36, white, [Math.floor(screen_width / 4), 30]);
+      blitCentered(`${player_name}(${player_score})`, 36, white, [Math.floor(screen_width * 3 / 4), 30]);
+      menu_button.center = [Math.floor(screen_width / 2), 30];
+      roundRect(menu_button, white);
+      blitCentered('MENU  (M)', 28, black, menu_button.center);
+    }
+  }
+  canvas.focus({ preventScroll: true });
+  // ?shot: a still for the arcade cover, mid-rally against the CPU
+  if (new URLSearchParams(location.search).has('shot')) {
+    game_mode = 'selfplay'; menu_active = false; restart_game();
+    ball_speed_x = 7; ball_speed_y = -7; ball.center = [screen_width * 0.62, screen_height * 0.42];
+    player_score = 3; opponent_score = 2; frozen = true;
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Space Invaders</title>
+<style>
+  /* Browser version of Al's pygame Space Invaders (the Python files are in original/).
+     Same 800 x 800 window, sprites, sounds, music, font, speeds and scoring. */
+  @font-face { font-family: monogram; src: url("monogram.ttf") format("truetype"); }
+  html, body { margin: 0; height: 100%; background: rgb(29, 29, 27); overflow: hidden; }
+  body { display: grid; place-items: center; touch-action: none; -webkit-user-select: none; user-select: none; }
+  canvas { display: block; image-rendering: pixelated; outline: none; }
+  #pad { position: fixed; left: 0; right: 0; bottom: 0; display: none; justify-content: space-between; padding: 12px; pointer-events: none; }
+  #pad.show { display: flex; }
+  #pad div { display: flex; gap: 10px; }
+  #pad button { pointer-events: auto; width: 78px; height: 72px; border: 3px solid rgb(243, 216, 63); background: rgba(29, 29, 27, .6); color: rgb(243, 216, 63); font: 32px/1 monogram, monospace; touch-action: none; }
+  #pad button.on { background: rgba(243, 216, 63, .85); color: rgb(29, 29, 27); }
+</style>
+</head>
+<body>
+<canvas id="screen" width="800" height="800" tabindex="0" aria-label="Space Invaders. Arrow keys to move, Space to shoot."></canvas>
+<div id="pad" aria-hidden="true">
+  <div><button data-k="ArrowLeft">◀</button><button data-k="ArrowRight">▶</button></div>
+  <div><button data-k="Space">FIRE</button></div>
+</div>
+<script>
+(() => {
+  const SCREEN_WIDTH = 750, SCREEN_HEIGHT = 700, OFFSET = 50;
+  const GREY = 'rgb(29, 29, 27)', YELLOW = 'rgb(243, 216, 63)';
+  const canvas = document.getElementById('screen'), g = canvas.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  function fit() { const s = Math.min(innerWidth / 800, innerHeight / 800); canvas.style.width = Math.floor(800 * s) + 'px'; canvas.style.height = Math.floor(800 * s) + 'px'; }
+  addEventListener('resize', fit); fit();
+
+  // ---------------- assets ----------------
+  const img = (src) => { const i = new Image(); i.src = src; return i; };
+  const IMG = { 1: img('alien_1.png'), 2: img('alien_2.png'), 3: img('alien_3.png'), mystery: img('mystery.png'), ship: img('spaceship.png') };
+  const SIZE = { 1: [38, 34], 2: [44, 34], 3: [41, 40], mystery: [58, 25], ship: [44, 28] };
+  let muted = false;
+  try { muted = localStorage.getItem('space-invaders.muted') === '1'; } catch (e) {}
+  const music = new Audio('music.ogg'); music.loop = true; music.volume = 0.5;
+  const sfx = { laser: new Audio('laser.ogg'), explosion: new Audio('explosion.ogg') };
+  function play(name) { if (muted) return; const a = sfx[name].cloneNode(); a.volume = 0.6; a.play().catch(() => {}); }
+  function startMusic() { if (!muted) music.play().catch(() => {}); }
+
+  // ---------------- sprites as rectangles (like pygame.Rect) ----------------
+  const collide = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  function laser(cx, cy, speed) { return { x: Math.round(cx - 2), y: Math.round(cy - 7.5), w: 4, h: 15, speed, alive: true }; }
+
+  // obstacle.py
+  const grid = [
+    [0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0],
+    [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0],
+    [0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0],
+    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1],
+    [1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1],
+    [1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1]];
+  function makeObstacle(x, y) {
+    const blocks = [];
+    for (let r = 0; r < grid.length; r++) for (let c = 0; c < grid[0].length; c++) if (grid[r][c]) blocks.push({ x: x + c * 3, y: y + r * 3, w: 3, h: 3, alive: true });
+    return blocks;
+  }
+
+  // ---------------- game.py ----------------
+  const game = {
+    ship: null, lasers: [], laserReady: true, laserTime: 0,
+    obstacles: [], aliens: [], aliensDirection: 1, alienLasers: [], mystery: null,
+    lives: 3, run: true, score: 0, highscore: 0, level: 1,
+    init() {
+      this.ship = this.newShip();
+      this.obstacles = this.createObstacles();
+      this.createAliens();
+      try { this.highscore = Number(localStorage.getItem('space-invaders.highscore')) || 0; } catch (e) { this.highscore = 0; }
+    },
+    newShip() { const [w, h] = SIZE.ship; return { x: Math.round((SCREEN_WIDTH + OFFSET) / 2 - w / 2), y: SCREEN_HEIGHT - h, w, h, speed: 6 }; },
+    createObstacles() {
+      const obstacleWidth = grid[0].length * 3;
+      const gap = (SCREEN_WIDTH + OFFSET - 4 * obstacleWidth) / 5;
+      const list = [];
+      for (let i = 0; i < 4; i++) list.push(makeObstacle(Math.floor((i + 1) * gap + i * obstacleWidth), SCREEN_HEIGHT - 100));
+      return list;
+    },
+    createAliens() {
+      for (let row = 0; row < 5; row++) for (let column = 0; column < 11; column++) {
+        const type = row === 0 ? 3 : row <= 2 ? 2 : 1, [w, h] = SIZE[type];
+        this.aliens.push({ type, x: 75 + column * 55 + OFFSET / 2, y: 110 + row * 55, w, h, alive: true });
+      }
+    },
+    moveAliens() {
+      for (const a of this.aliens) a.x += this.aliensDirection;
+      for (const a of this.aliens) {
+        if (a.x + a.w >= SCREEN_WIDTH + OFFSET / 2) { this.aliensDirection = -1; this.alienMoveDown(2); }
+        else if (a.x <= OFFSET / 2) { this.aliensDirection = 1; this.alienMoveDown(2); }
+      }
+    },
+    alienMoveDown(d) { for (const a of this.aliens) a.y += d; },
+    alienShootLaser() {
+      if (!this.aliens.length) return;
+      const a = this.aliens[Math.floor(Math.random() * this.aliens.length)];
+      this.alienLasers.push(laser(a.x + a.w / 2, a.y + a.h / 2, -6));
+    },
+    createMysteryShip() {
+      const [w, h] = SIZE.mystery, left = Math.random() < 0.5;
+      // Al's version starts the right-hand ship past the edge, where it is removed at once; it starts just inside here
+      this.mystery = { x: left ? OFFSET / 2 : SCREEN_WIDTH + OFFSET / 2 - w - 1, y: 90, w, h, speed: left ? 3 : -3 };
+    },
+    checkForCollisions() {
+      for (const l of this.lasers) {
+        if (!l.alive) continue;
+        const hit = this.aliens.filter((a) => collide(l, a));
+        if (hit.length) {
+          play('explosion');
+          for (const a of hit) { a.alive = false; this.score += a.type * 100; this.checkForHighscore(); }
+          l.alive = false;
+        }
+        if (this.mystery && collide(l, this.mystery)) { this.mystery = null; this.score += 500; play('explosion'); this.checkForHighscore(); l.alive = false; }
+        for (const ob of this.obstacles) { let any = false; for (const b of ob) if (b.alive && collide(l, b)) { b.alive = false; any = true; } if (any) l.alive = false; }
+      }
+      for (const l of this.alienLasers) {
+        if (!l.alive) continue;
+        if (collide(l, this.ship)) { l.alive = false; this.lives -= 1; if (this.lives === 0) this.gameOver(); }
+        for (const ob of this.obstacles) { let any = false; for (const b of ob) if (b.alive && collide(l, b)) { b.alive = false; any = true; } if (any) l.alive = false; }
+      }
+      for (const a of this.aliens) {
+        if (!a.alive) continue;
+        for (const ob of this.obstacles) for (const b of ob) if (b.alive && collide(a, b)) b.alive = false;
+        if (collide(a, this.ship)) this.gameOver();
+      }
+      this.aliens = this.aliens.filter((a) => a.alive);
+      this.lasers = this.lasers.filter((l) => l.alive);
+      this.alienLasers = this.alienLasers.filter((l) => l.alive);
+      for (let i = 0; i < this.obstacles.length; i++) this.obstacles[i] = this.obstacles[i].filter((b) => b.alive);
+      // a cleared wave brings the next one (Al's version leaves an empty screen)
+      if (this.run && !this.aliens.length) { this.level++; this.createAliens(); this.alienLasers = []; }
+    },
+    gameOver() { this.run = false; },
+    reset() {
+      this.run = true; this.lives = 3; this.level = 1;
+      this.ship = this.newShip(); this.lasers = [];
+      this.aliens = []; this.alienLasers = []; this.createAliens(); this.aliensDirection = 1;
+      this.mystery = null; this.obstacles = this.createObstacles(); this.score = 0;
+    },
+    checkForHighscore() {
+      if (this.score > this.highscore) { this.highscore = this.score; try { localStorage.setItem('space-invaders.highscore', String(this.highscore)); } catch (e) {} }
+    },
+  };
+
+  // ---------------- spaceship.py ----------------
+  const keys = new Set();
+  function updateShip(now) {
+    const s = game.ship;
+    if (keys.has('ArrowRight')) s.x += s.speed;
+    if (keys.has('ArrowLeft')) s.x -= s.speed;
+    if (keys.has('Space') && game.laserReady) {
+      game.laserReady = false;
+      game.lasers.push(laser(s.x + s.w / 2, s.y + s.h / 2, 5));
+      game.laserTime = now;
+      play('laser');
+    }
+    if (s.x + s.w > SCREEN_WIDTH) s.x = SCREEN_WIDTH - s.w;
+    if (s.x < OFFSET) s.x = OFFSET;
+    for (const l of game.lasers) { l.y -= l.speed; if (l.y > SCREEN_HEIGHT + 15 || l.y < 0) l.alive = false; }
+    game.lasers = game.lasers.filter((l) => l.alive);
+    if (!game.laserReady && now - game.laserTime >= 300) game.laserReady = true;
+  }
+
+  // ---------------- main.py: timers, input, loop ----------------
+  let started = false, clock = 0, nextAlienShot = 300, nextMystery = 4000 + Math.random() * 4000;
+  function begin() { if (!started) { started = true; startMusic(); } }
+  addEventListener('keydown', (e) => {
+    if (['ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+    keys.add(e.code);
+    if (e.code === 'KeyM') { muted = !muted; try { localStorage.setItem('space-invaders.muted', muted ? '1' : '0'); } catch (err) {} if (muted) music.pause(); else if (started) music.play().catch(() => {}); }
+    if (e.code === 'Space') { if (!started) begin(); else if (!game.run) game.reset(); }
+  });
+  addEventListener('keyup', (e) => keys.delete(e.code));
+  addEventListener('blur', () => keys.clear());
+
+  // phones: on-screen buttons, and a tap starts or restarts
+  const pad = document.getElementById('pad');
+  if ('ontouchstart' in window || matchMedia('(pointer: coarse)').matches) pad.classList.add('show');
+  const fingers = new Map();
+  function sync() { const k = new Set(fingers.values()); for (const c of ['ArrowLeft', 'ArrowRight', 'Space']) { if (k.has(c)) keys.add(c); else keys.delete(c); } pad.querySelectorAll('button').forEach((b) => b.classList.toggle('on', k.has(b.dataset.k))); }
+  pad.addEventListener('pointerdown', (e) => { const b = e.target.closest('button'); if (!b) return; e.preventDefault(); fingers.set(e.pointerId, b.dataset.k); if (b.dataset.k === 'Space') { if (!started) begin(); else if (!game.run) game.reset(); } sync(); });
+  addEventListener('pointermove', (e) => { if (!fingers.has(e.pointerId)) return; const el = document.elementFromPoint(e.clientX, e.clientY), b = el && el.closest && el.closest('#pad button'); if (b) fingers.set(e.pointerId, b.dataset.k); else fingers.delete(e.pointerId); sync(); });
+  const lift = (e) => { if (fingers.delete(e.pointerId)) sync(); };
+  addEventListener('pointerup', lift); addEventListener('pointercancel', lift);
+  canvas.addEventListener('pointerdown', () => { canvas.focus(); if (!started) begin(); else if (!game.run) game.reset(); });
+
+  const STEP = 1000 / 60;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    acc += Math.min(250, now - last); last = now;
+    while (acc >= STEP) { step(); acc -= STEP; }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  function step() {
+    if (!started) return;
+    clock += STEP;
+    // SHOOT_LASER every 300 ms and MYSTERYSHIP every 4 to 8 s, as with pygame.time.set_timer
+    if (clock >= nextAlienShot) { nextAlienShot += 300; if (game.run) game.alienShootLaser(); }
+    if (clock >= nextMystery) { nextMystery = clock + 4000 + Math.random() * 4000; if (game.run) game.createMysteryShip(); }
+    if (game.run) {
+      updateShip(clock);
+      game.moveAliens();
+      for (const l of game.alienLasers) { l.y -= l.speed; if (l.y > SCREEN_HEIGHT + 15 || l.y < 0) l.alive = false; }
+      game.alienLasers = game.alienLasers.filter((l) => l.alive);
+      if (game.mystery) { const m = game.mystery; m.x += m.speed; if (m.x + m.w > SCREEN_WIDTH + OFFSET / 2 || m.x < OFFSET / 2) game.mystery = null; }
+      game.checkForCollisions();
+    }
+  }
+
+  function text(s, x, y) { g.fillStyle = YELLOW; g.font = '40px monogram, monospace'; g.textBaseline = 'top'; g.fillText(s, x, y); }
+  function draw() {
+    g.fillStyle = GREY; g.fillRect(0, 0, 800, 800);
+    // UI frame
+    g.strokeStyle = YELLOW; g.lineWidth = 2; g.beginPath(); g.roundRect(11, 11, 778, 778, 60); g.stroke();
+    g.lineWidth = 3; g.beginPath(); g.moveTo(25, 731.5); g.lineTo(775, 731.5); g.stroke();
+    text(!game.run ? 'GAME OVER' : 'LEVEL ' + String(game.level).padStart(2, '0'), 570, 740);
+    for (let i = 0, x = 50; i < game.lives; i++, x += 50) g.drawImage(IMG.ship, x, 745);
+    text('SCORE', 50, 15); text(String(game.score).padStart(5, '0'), 50, 40);
+    text('HIGH-SCORE', 550, 15); text(String(game.highscore).padStart(5, '0'), 625, 40);
+    // sprites
+    g.drawImage(IMG.ship, game.ship.x, game.ship.y);
+    g.fillStyle = YELLOW;
+    for (const l of game.lasers) g.fillRect(l.x, l.y, l.w, l.h);
+    for (const ob of game.obstacles) for (const b of ob) g.fillRect(b.x, b.y, 3, 3);
+    for (const a of game.aliens) g.drawImage(IMG[a.type], a.x, a.y);
+    for (const l of game.alienLasers) g.fillRect(l.x, l.y, l.w, l.h);
+    if (game.mystery) g.drawImage(IMG.mystery, game.mystery.x, game.mystery.y);
+    if (!started) {
+      g.fillStyle = 'rgba(29, 29, 27, .78)'; g.fillRect(150, 300, 500, 150);
+      text(pad.classList.contains('show') ? 'TAP FIRE TO START' : 'PRESS SPACE TO START', pad.classList.contains('show') ? 262 : 228, 330);
+      g.font = '28px monogram, monospace'; g.fillText('ARROWS MOVE   SPACE SHOOTS   M MUTES', 205, 385);
+      g.fillText('BY AL', 372, 415);
+    } else if (!game.run) {
+      g.fillStyle = 'rgba(29, 29, 27, .78)'; g.fillRect(200, 330, 400, 70);
+      g.fillStyle = YELLOW; g.font = '32px monogram, monospace';
+      g.fillText(pad.classList.contains('show') ? 'TAP FIRE TO PLAY AGAIN' : 'PRESS SPACE TO PLAY AGAIN', pad.classList.contains('show') ? 260 : 238, 352);
+    }
+  }
+
+  game.init();
+  window.__invaders = game;   // for testing from the browser console
+  canvas.focus();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

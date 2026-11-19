@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Number Analysis Toolkit</title>
+<style>
+  /* Browser version of Leo's C++ console program (toolkit.cpp in this folder).
+     The page acts like the console window: it prints lines and reads what you type. */
+  :root { --bg: #0c0c0c; --ink: #cccccc; --bright: #f2f2f2; --green: #13a10e; --lime: #16c60c; --red: #e74856; --yellow: #f9f1a5; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #1b1b1b; }
+  body { display: grid; grid-template-rows: auto 1fr auto; font: 17px/1.35 Consolas, "Cascadia Mono", "Courier New", monospace; color: var(--ink); }
+  .titlebar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #2b2b2b; color: var(--bright); font: 600 14px/1 system-ui, "Segoe UI", sans-serif; }
+  .titlebar span { color: #9a9a9a; font-weight: 500; }
+  .titlebar a { margin-left: auto; color: #9ad0ff; font-weight: 500; }
+  #screen { background: var(--bg); padding: 14px 18px 24px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; outline: none; cursor: text; }
+  #screen .line { min-height: 1.35em; }
+  #screen.snake { font-size: clamp(16px, 3.3vh, 32px); line-height: 1.08; }
+  #screen.snake .line { min-height: 1.08em; }
+  .you { color: var(--bright); }
+  .note { color: var(--yellow); }
+  .snake-head { color: var(--lime); font-weight: 700; }
+  .snake-tail { color: var(--green); }
+  .fruit { color: var(--red); font-weight: 700; }
+  .prompt-row { display: flex; }
+  #entry { flex: 1; background: transparent; border: 0; color: var(--bright); font: inherit; outline: none; padding: 0; min-width: 4ch; caret-color: var(--bright); }
+  .keys { display: none; gap: 8px; justify-content: center; padding: 10px; background: #161616; }
+  .keys.show { display: flex; }
+  .keys button { width: 64px; height: 56px; font: 700 18px/1 system-ui, sans-serif; background: #2b2b2b; color: var(--bright); border: 2px solid #555; border-radius: 0; touch-action: manipulation; }
+  .keys button:active { background: var(--green); }
+  .hint { display: flex; align-items: center; gap: 12px; padding: 6px 14px; background: #161616; color: #8a8a8a; font: 13px/1.4 system-ui, sans-serif; }
+  .hint span { flex: 1; }
+  #enter-btn { display: none; flex: none; height: 44px; padding: 0 18px; background: var(--green); color: var(--bright); border: 0; border-radius: 0; font: 700 15px/1 system-ui, sans-serif; touch-action: manipulation; }
+  #enter-btn:active { background: var(--lime); }
+  .touch #enter-btn { display: block; }
+</style>
+</head>
+<body>
+  <div class="titlebar">Number Analysis Toolkit <span>by Leo, ported from C++</span><a href="toolkit.cpp" target="_blank" rel="noopener">See the C++ code</a></div>
+  <div id="screen" tabindex="0" aria-live="polite"></div>
+  <div>
+    <div class="keys" id="keys" aria-label="Snake controls">
+      <button data-key="a" aria-label="Left">◀</button>
+      <button data-key="w" aria-label="Up">▲</button>
+      <button data-key="s" aria-label="Down">▼</button>
+      <button data-key="d" aria-label="Right">▶</button>
+      <button data-key="x" aria-label="Quit">X</button>
+    </div>
+    <div class="hint"><span>Type a number and press Enter. Everything works like Leo’s console program.</span><button type="button" id="enter-btn">ENTER ↵</button></div>
+  </div>
+
+<script>
+(() => {
+  const screen = document.getElementById('screen');
+  const keysEl = document.getElementById('keys');
+  const touch = 'ontouchstart' in window || matchMedia('(pointer: coarse)').matches;
+  const enterBtn = document.getElementById('enter-btn');
+  if (touch) document.body.classList.add('touch');
+  // tapping ENTER must not take focus from the text box (that would close the phone keyboard)
+  enterBtn.addEventListener('pointerdown', (e) => e.preventDefault());
+
+  // ---------------- a tiny console: cout, cin and system("cls") ----------------
+  let current = null;   // the line being printed to
+  function newLine() { current = document.createElement('div'); current.className = 'line'; screen.append(current); }
+  function out(text, cls) {   // like cout <<, where "\n" starts a new line
+    const parts = String(text).split('\n');
+    parts.forEach((part, i) => {
+      if (i > 0 || !current) newLine();
+      if (part) { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = part; current.append(s); }
+    });
+    screen.scrollTop = screen.scrollHeight;
+  }
+  function cls() { screen.textContent = ''; current = null; }
+
+  const tokens = [];       // cin reads one word at a time, across lines
+  let waiting = null;
+  function readLine() {
+    return new Promise((resolve) => {
+      if (!current) newLine();
+      const row = document.createElement('span'); row.className = 'prompt-row';
+      const input = document.createElement('input'); input.id = 'entry'; input.autocomplete = 'off'; input.spellcheck = false;
+      // the normal keyboard: phone number pads can lack Enter and the minus sign
+      input.enterKeyHint = 'enter'; input.setAttribute('autocapitalize', 'off'); input.setAttribute('aria-label', 'Type here and press Enter');
+      row.append(input); current.append(row);
+      input.focus({ preventScroll: true });
+      screen.scrollTop = screen.scrollHeight;
+      const submit = () => {
+        enterBtn.onclick = null;
+        const text = input.value;
+        row.remove(); out(text, 'you'); out('\n');
+        resolve(text);
+      };
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+      enterBtn.onclick = submit;
+    });
+  }
+  async function cin() {                  // the next word typed, like cin >> x
+    while (!tokens.length) { const line = await readLine(); tokens.push(...line.trim().split(/\s+/).filter(Boolean)); }
+    return tokens.shift();
+  }
+  // cin >> int / double: anything that is not a number reads as "not a number"
+  const asInt = (t) => /^[+-]?\d+$/.test(t) ? BigInt(t) : null;
+  const asDouble = (t) => /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(t) ? Number(t) : null;
+  // print a double the way cout does by default (6 significant digits)
+  function dbl(x) {
+    if (!isFinite(x)) return x > 0 ? 'inf' : x < 0 ? '-inf' : 'nan';
+    if (x === 0) return '0';
+    const e = Math.floor(Math.log10(Math.abs(x)));
+    if (e < -5 || e >= 6) {
+      let [m, ex] = x.toExponential(5).split('e');
+      m = m.replace(/\.?0+$/, ''); const n = Number(ex);
+      return m + 'e' + (n < 0 ? '-' : '+') + String(Math.abs(n)).padStart(2, '0');
+    }
+    return String(Number(x.toPrecision(6)));
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  function waitKey() { return new Promise((resolve) => { const k = () => { removeEventListener('keydown', k); keysEl.removeEventListener('click', k); resolve(); }; addEventListener('keydown', k); keysEl.addEventListener('click', k); }); }
+
+  // ---------------- Leo's functions ----------------
+  function displayMenu() {
+    out('\nNumber Analysis Toolkit-please choose an option from below:\n');
+    out('1. Check if number is prime\n');
+    out('2. Find min and max of 5 numbers\n');
+    out('3. Calculate factorial\n');
+    out('4. Convert temperature\n');
+    out("5. Find a large number's root\n");
+    out('6. Simulate Logic Gates\n');
+    out('7. Quit\n\n');
+    out('Enter your choice: ');
+  }
+  function isPrime(n) {
+    if (n < 0n) { out('Number must be a positive integer.\n'); return false; }
+    if (n === 0n || n === 1n) return false;
+    // Leo tries every divisor up to n / 2; stopping at the square root gives the same answer, faster
+    for (let d = 2n; d * d <= n; d++) if (n % d === 0n) return false;
+    return true;
+  }
+  function getMinMax(arr) {
+    let min = arr[0], max = arr[0];
+    for (let i = 1; i < arr.length; ++i) { if (arr[i] < min) min = arr[i]; if (arr[i] > max) max = arr[i]; }
+    return { min, max };
+  }
+  function factorial(n) { return n <= 1n ? 1n : n * factorial(n - 1n); }   // exact, even for big numbers
+  const celsiusToFahrenheit = (c) => (c * 9.0 / 5.0) + 32.0;
+  function digitalRoot(n) {
+    if (n < 0n) n = -n;
+    while (n > 9n) { let sum = 0n; while (n > 0n) { sum += n % 10n; n /= 10n; } n = sum; }
+    return n;
+  }
+  async function simulateLogicGates() {
+    out('\n--- Logic Gates Simulator ---\n');
+    out('Enter input A (0 or 1): '); const a = asInt(await cin()) ?? 0n;
+    out('Enter input B (0 or 1): '); const b = asInt(await cin()) ?? 0n;
+    const A = a !== 0n, B = b !== 0n, v = (x) => (x ? 1 : 0);
+    out(`\nResults for A = ${v(A)}, B = ${v(B)}:\n`);
+    out('----------------------------------------\n');
+    out(`1. AND  (A && B) : ${v(A && B)}\n`);
+    out(`2. OR   (A || B) : ${v(A || B)}\n`);
+    out(`3. NOT  (!A)     : ${v(!A)} (for input A)\n`);
+    out(`4. XOR  (A ^ B)  : ${v(A !== B)}\n`);
+    out(`5. NAND          : ${v(!(A && B))}\n`);
+    out(`6. NOR           : ${v(!(A || B))}\n`);
+    out('----------------------------------------\n');
+  }
+
+  // ---------------- the secret Snake game ----------------
+  async function playSnakeGame() {
+    const width = 20, height = 20;
+    let gameOver = false, dir = 'STOP';
+    let x = width >> 1, y = height >> 1, score = 0, nTail = 0;
+    const tailX = new Array(100).fill(0), tailY = new Array(100).fill(0);
+    let fruitX = Math.floor(Math.random() * width), fruitY = Math.floor(Math.random() * height);
+    const onKey = (k) => {
+      switch (k) {
+        case 'a': if (dir !== 'RIGHT') dir = 'LEFT'; break;
+        case 'd': if (dir !== 'LEFT') dir = 'RIGHT'; break;
+        case 'w': if (dir !== 'DOWN') dir = 'UP'; break;
+        case 's': if (dir !== 'UP') dir = 'DOWN'; break;
+        case 'x': gameOver = true; break;
+      }
+    };
+    const keyHandler = (e) => { const k = e.key.toLowerCase(); if ('wasdx'.includes(k) && k.length === 1) { e.preventDefault(); onKey(k); } };
+    const tapHandler = (e) => { const b = e.target.closest('button[data-key]'); if (b) onKey(b.dataset.key); };
+    addEventListener('keydown', keyHandler);
+    keysEl.addEventListener('click', tapHandler);
+    if (touch) keysEl.classList.add('show');
+    screen.classList.add('snake');
+    screen.focus({ preventScroll: true });
+
+    function draw() {
+      cls();
+      out('#'.repeat(width + 2) + '\n');
+      for (let i = 0; i < height; i++) {
+        let row = '';
+        const flush = () => { if (row) { out(row); row = ''; } };
+        for (let j = 0; j < width; j++) {
+          if (j === 0) row += '#';
+          if (i === y && j === x) { flush(); out('O', 'snake-head'); }
+          else if (i === fruitY && j === fruitX) { flush(); out('F', 'fruit'); }
+          else {
+            let printTail = false;
+            for (let k = 0; k < nTail; k++) if (tailX[k] === j && tailY[k] === i) { flush(); out('o', 'snake-tail'); printTail = true; }
+            if (!printTail) row += ' ';
+          }
+          if (j === width - 1) row += '#';
+        }
+        flush(); out('\n');
+      }
+      out('#'.repeat(width + 2) + '\n');
+      out('Score: ' + score + '\n');
+      out(touch ? 'Controls: the arrow buttons below, X (Quit)\n' : 'Controls: W (Up), A (Left), S (Down), D (Right), X (Quit)\n');
+    }
+    function logic() {
+      let prevX = tailX[0], prevY = tailY[0];
+      tailX[0] = x; tailY[0] = y;
+      for (let i = 1; i < nTail; i++) { const p2x = tailX[i], p2y = tailY[i]; tailX[i] = prevX; tailY[i] = prevY; prevX = p2x; prevY = p2y; }
+      if (dir === 'LEFT') x--; else if (dir === 'RIGHT') x++; else if (dir === 'UP') y--; else if (dir === 'DOWN') y++;
+      if (x >= width || x < 0 || y >= height || y < 0) gameOver = true;
+      for (let i = 0; i < nTail; i++) if (tailX[i] === x && tailY[i] === y) gameOver = true;
+      if (x === fruitX && y === fruitY) { score += 10; fruitX = Math.floor(Math.random() * width); fruitY = Math.floor(Math.random() * height); nTail = Math.min(99, nTail + 1); }
+    }
+    while (!gameOver) { draw(); logic(); await sleep(100); }
+    removeEventListener('keydown', keyHandler);
+    keysEl.removeEventListener('click', tapHandler);
+    screen.classList.remove('snake');
+    out('\nGame Over! Final Score: ' + score + '\nReturning to Toolkit Menu...\n');
+    out('Press any key to continue . . . ');
+    await sleep(150);
+    await waitKey();
+    keysEl.classList.remove('show');
+    out('\n');
+  }
+
+  // ---------------- main(): the menu loop ----------------
+  async function main() {
+    let choice;
+    do {
+      displayMenu();
+      const t = await cin();
+      choice = asInt(t);
+      switch (choice === null ? null : Number(choice)) {
+        case 1: {
+          out('Enter an integer: ');
+          const number = asInt(await cin());
+          if (number === null) { out('That is not an integer.\n'); break; }
+          out(number + (isPrime(number) ? ' is prime.\n' : ' is not prime.\n'));
+          break;
+        }
+        case 2: {
+          const numbers = [];
+          out('Enter 5 numbers:\n');
+          while (numbers.length < 5) { const v = asDouble(await cin()); if (v === null) out('Please enter a number.\n'); else numbers.push(v); }
+          const { min, max } = getMinMax(numbers);
+          out('Minimum: ' + dbl(min) + '\n');
+          out('Maximum: ' + dbl(max) + '\n');
+          break;
+        }
+        case 3: {
+          out('Enter a number: ');
+          const number = asInt(await cin());
+          if (number === null) out('That is not an integer.\n');
+          else if (number < 0n) out('Factorial is only defined for nonnegative integers.\n');
+          else if (number > 1000n) out('That number is too big to show here. Try 1000 or less.\n');
+          else out(number + '! = ' + factorial(number) + '\n');
+          break;
+        }
+        case 4: {
+          out('Enter temperature in Celsius: ');
+          const celsius = asDouble(await cin());
+          if (celsius === null) { out('That is not a number.\n'); break; }
+          out('Temperature in Fahrenheit: ' + dbl(celsiusToFahrenheit(celsius)) + '\n');
+          break;
+        }
+        case 5: {
+          out('Enter a large number: ');
+          const number = asInt(await cin());
+          if (number === null) { out('That is not a whole number.\n'); break; }
+          out('The digital root of ' + number + ' is: ' + digitalRoot(number) + '\n');
+          break;
+        }
+        case 6: await simulateLogicGates(); break;
+        case 123456: out('\nLaunching Secret Snake Game...\n'); await sleep(600); await playSnakeGame(); break;
+        case 7: out('Goodbye!\n'); break;
+        default: out('Invalid choice. Please try again.\n');
+      }
+    } while (choice === null || Number(choice) !== 7);
+    out('\n(The program has ended. Press any key to run it again.)', 'note');
+    await waitKey();
+    tokens.length = 0;
+    cls();
+    main();
+  }
+
+  screen.addEventListener('click', () => { const e = document.getElementById('entry'); if (e) e.focus({ preventScroll: true }); });
+  // ?shot: a cover picture for the arcade, part-way through the logic gates
+  if (new URLSearchParams(location.search).has('shot')) tokens.push('6', '1', '0');
+  main();
+})();
+</script>
+</body>
+</html>

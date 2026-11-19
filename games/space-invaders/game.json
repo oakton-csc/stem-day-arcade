@@ -1,0 +1,8 @@
+{
+  "title": "Space Invaders",
+  "author": "Al",
+  "description": "Defend the base from waves of pixel aliens. Hide behind the shields, hit the mystery ship for 500 points, and beat the high score.",
+  "controls": "Left and Right arrows to move, Space to shoot, M to mute. On a phone, use the on-screen buttons.",
+  "tags": ["computer science"],
+  "thumbnail": "thumbnail.png"
+}

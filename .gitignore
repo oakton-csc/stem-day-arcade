@@ -1,0 +1,10 @@
+# Built automatically from each game's game.json; don't commit it.
+games.json
+games.js
+
+node_modules/
+.DS_Store
+Thumbs.db
+
+# Design-check screenshots and notes
+.taste-skill/

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Frostbyte Tycoon</title>
+  <meta name="description" content="Frostbyte Tycoon — a cozy winter idle tycoon. Shovel snow, sell cocoa, and build an Aurora Borealis empire.">
+  <meta name="theme-color" content="#0b1d3a">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/main.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <canvas id="snow" aria-hidden="true" hidden></canvas>
+  <a class="skip-link" href="#main">Skip to game</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="assets/favicon.svg" alt="" width="32" height="32">
+      <h1>Frostbyte <span>Tycoon</span></h1>
+    </div>
+    <dl class="hud" aria-live="off">
+      <div class="hud-item hud-cash"><dt>Snow Bucks</dt><dd id="hud-cash">$0</dd></div>
+      <div class="hud-item"><dt>Income</dt><dd id="hud-income">$0/s</dd></div>
+      <div class="hud-item"><dt>Snowflakes</dt><dd id="hud-flakes">0</dd></div>
+    </dl>
+    <p id="boost-banner" class="boost-banner" hidden></p>
+  </header>
+
+  <p id="storage-warning" class="banner banner-warn" role="alert" hidden>
+    ⚠️ Your browser is blocking storage (private mode?). The game works, but progress will not be kept after you close this tab. Use Settings → Export to keep a copy.
+  </p>
+
+  <nav class="tabs" role="tablist" aria-label="Game panels">
+    <button type="button" role="tab" class="tab tab-biz" id="tab-businesses" data-tab="businesses" aria-controls="panel-businesses">🏢<span>Businesses</span></button>
+    <button type="button" role="tab" class="tab" id="tab-upgrades" data-tab="upgrades" aria-controls="panel-upgrades">⬆️<span>Upgrades</span><b class="badge" id="badge-upgrades"></b></button>
+    <button type="button" role="tab" class="tab" id="tab-managers" data-tab="managers" aria-controls="panel-managers">🤖<span>Managers</span><b class="badge" id="badge-managers"></b></button>
+    <button type="button" role="tab" class="tab" id="tab-prestige" data-tab="prestige" aria-controls="panel-prestige">🌨️<span>Prestige</span><b class="badge" id="badge-prestige"></b></button>
+    <button type="button" role="tab" class="tab" id="tab-stats" data-tab="stats" aria-controls="panel-stats">📊<span>Stats</span></button>
+    <button type="button" role="tab" class="tab" id="tab-settings" data-tab="settings" aria-controls="panel-settings">⚙️<span>Settings</span></button>
+  </nav>
+
+  <main id="main" class="layout">
+    <!-- Business list (always visible on desktop) -->
+    <section id="panel-businesses" class="panel panel-biz" role="tabpanel" aria-labelledby="tab-businesses" tabindex="-1">
+      <div class="buybar">
+        <span id="buy-label">Buy amount</span>
+        <div class="seg" role="radiogroup" aria-labelledby="buy-label">
+          <button type="button" role="radio" data-buy-mode="1" aria-checked="true">×1</button>
+          <button type="button" role="radio" data-buy-mode="10" aria-checked="false">×10</button>
+          <button type="button" role="radio" data-buy-mode="100" aria-checked="false">×100</button>
+          <button type="button" role="radio" data-buy-mode="max" aria-checked="false">Max</button>
+        </div>
+      </div>
+      <p class="hint">Tap a business icon to run a cycle. Hire a manager to automate it.</p>
+      <div id="biz-list" class="biz-list"></div>
+    </section>
+
+    <!-- Upgrades -->
+    <section id="panel-upgrades" class="panel side" role="tabpanel" aria-labelledby="tab-upgrades" tabindex="-1" hidden>
+      <h2>Global upgrades</h2>
+      <p class="sub">Boost every business. Revealed as your lifetime earnings grow.</p>
+      <div id="global-list" class="u-list"></div>
+      <p id="global-empty" class="empty" hidden>All global upgrades purchased. ✨</p>
+      <h2>Business upgrades</h2>
+      <p class="sub">Each business has 4 upgrades. Own enough units to unlock them.</p>
+      <div id="upgrade-list" class="u-list"></div>
+      <p id="upgrade-empty" class="empty" hidden>Nothing to upgrade right now — unlock more businesses!</p>
+      <details class="owned-upgrades">
+        <summary id="owned-upgrade-summary">Purchased upgrades (0)</summary>
+        <ul id="owned-upgrade-list" class="plain-list"></ul>
+      </details>
+    </section>
+
+    <!-- Managers -->
+    <section id="panel-managers" class="panel side" role="tabpanel" aria-labelledby="tab-managers" tabindex="-1" hidden>
+      <h2>Managers</h2>
+      <p class="sub">A manager runs their business forever and keeps earning while you are away.</p>
+      <ul id="manager-list" class="u-list plain-list"></ul>
+    </section>
+
+    <!-- Prestige -->
+    <section id="panel-prestige" class="panel side" role="tabpanel" aria-labelledby="tab-prestige" tabindex="-1" hidden>
+      <h2>Blizzard Reset</h2>
+      <p class="sub">Let a blizzard bury your empire and start over stronger. Every Snowflake you hold adds <span id="pr-per">+2%</span> to all income.</p>
+      <div class="pr-stats">
+        <div><span>Snowflakes</span><strong id="pr-flakes">0</strong></div>
+        <div><span>Income bonus</span><strong id="pr-bonus">+0%</strong></div>
+        <div><span>Lifetime earnings</span><strong id="pr-lifetime">$0</strong></div>
+      </div>
+      <div id="pr-unlock" class="pr-unlock">
+        <div class="ms-track"><div id="pr-unlock-fill" class="ms-fill"></div></div>
+        <p id="pr-unlock-text"></p>
+      </div>
+      <p id="pr-preview" class="pr-preview"></p>
+      <p id="pr-next" class="sub"></p>
+      <button type="button" id="pr-reset" class="btn btn-danger btn-wide">🌨️ Blizzard Reset</button>
+      <h2>Snowflake shop</h2>
+      <p class="sub">Permanent upgrades that survive every reset. Paid with Snowflakes.</p>
+      <ul id="shop-list" class="u-list plain-list"></ul>
+    </section>
+
+    <!-- Stats -->
+    <section id="panel-stats" class="panel side" role="tabpanel" aria-labelledby="tab-stats" tabindex="-1" hidden>
+      <h2>Stats</h2>
+      <dl id="stats-list" class="stats"></dl>
+    </section>
+
+    <!-- Settings -->
+    <section id="panel-settings" class="panel side" role="tabpanel" aria-labelledby="tab-settings" tabindex="-1" hidden>
+      <h2>Settings</h2>
+      <div class="setting">
+        <label class="switch">
+          <input type="checkbox" id="set-snow">
+          <span class="switch-ui" aria-hidden="true"></span>
+          <span>Falling snow animation</span>
+        </label>
+        <p id="reduced-motion-note" class="sub" hidden>Your system asks for reduced motion, so snow stays off.</p>
+      </div>
+      <div class="setting">
+        <label for="set-format">Number format</label>
+        <select id="set-format">
+          <option value="suffix">Suffixes (1.23M)</option>
+          <option value="scientific">Scientific (1.23e6)</option>
+        </select>
+      </div>
+
+      <h2>Save data</h2>
+      <p id="storage-note" class="sub">Progress autosaves every <span id="autosave-secs">10</span> seconds in this browser.</p>
+      <div class="btn-row">
+        <button type="button" id="btn-save" class="btn btn-primary">💾 Save now</button>
+        <button type="button" id="btn-export-copy" class="btn">📋 Export (copy)</button>
+        <button type="button" id="btn-export-download" class="btn">⬇️ Export (.txt)</button>
+      </div>
+      <label for="import-text" class="block-label">Import a save</label>
+      <textarea id="import-text" rows="4" placeholder="Paste an exported save string here" spellcheck="false" autocomplete="off" aria-describedby="import-error"></textarea>
+      <p id="import-error" class="error" role="alert" hidden></p>
+      <div class="btn-row">
+        <button type="button" id="btn-import" class="btn">📥 Import</button>
+      </div>
+
+      <h2>Danger zone</h2>
+      <button type="button" id="btn-hard-reset" class="btn btn-danger">🗑️ Hard reset (delete everything)</button>
+    </section>
+  </main>
+
+  <div id="event-layer" class="event-layer"></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <dialog id="modal" class="modal"></dialog>
+
+  <noscript><p class="banner banner-warn">Frostbyte Tycoon needs JavaScript enabled to run.</p></noscript>
+</body>
+</html>
