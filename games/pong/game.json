@@ -1,0 +1,8 @@
+{
+  "title": "Pong",
+  "author": "Pavlo",
+  "description": "The classic paddle game, against the computer or a friend. The ball bounces off walls and paddles at a constant speed.",
+  "controls": "1 for VS CPU, 2 for 1 VS 1. Up and Down arrows move your paddle; Player 1 uses W and S. M opens the menu.",
+  "tags": ["physics"],
+  "thumbnail": "thumbnail.png"
+}

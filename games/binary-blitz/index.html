@@ -31,11 +31,11 @@
   .target { font-size: clamp(4rem, 18vw, 8rem); font-weight: 800; line-height: 1; margin: 8px 0 4px; font-variant-numeric: tabular-nums; transition: color .15s; }
   .target.hit { color: var(--good); }
   .current { color: var(--dim); margin-bottom: 20px; font-variant-numeric: tabular-nums; }
-  .bits { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  .bits { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: clamp(3px, 1.4vw, 8px); }
   .bit {
-    appearance: none; border: 0; border-radius: 10px;
+    appearance: none; border: 0; border-radius: 10px; min-width: 0; padding: 0; touch-action: manipulation;
     background: var(--off); color: var(--ink);
-    font: inherit; font-size: clamp(1.4rem, 6vw, 2.4rem); font-weight: 800;
+    font: inherit; font-size: clamp(1.1rem, 6vw, 2.4rem); font-weight: 800;
     aspect-ratio: 3 / 4; cursor: pointer;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
     transition: background .08s, transform .08s;

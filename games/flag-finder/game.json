@@ -1,0 +1,9 @@
+{
+  "title": "Flag Finder",
+  "author": "Oakton CSC",
+  "github": "oakton-csc",
+  "description": "Hide a flag inside a mountain, then watch a gold-and-fold trick find it with just 11 single-block tests.",
+  "controls": "Click a block to hide the flag (R for random), then press Enter to run the finder.",
+  "tags": ["computer science", "math"],
+  "thumbnail": "thumbnail.png"
+}

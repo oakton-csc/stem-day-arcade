@@ -1,0 +1,8 @@
+{
+  "title": "Momentum Rally",
+  "author": "Dhun",
+  "description": "A pixel-art race against three rivals where grip, drag and momentum are simulated. Beat the clock to get on the top 10.",
+  "controls": "Arrows or WASD to drive, Space to drift, P to pause. On a phone, use the on-screen pedals and steering.",
+  "tags": ["physics"],
+  "thumbnail": "thumbnail.png"
+}

@@ -1,0 +1,8 @@
+{
+  "title": "Overstack",
+  "author": "Fazle",
+  "description": "Drop sliding blocks so their fuses line up; any overhang burns away. Every pixel, sound and song is generated in code.",
+  "controls": "Click, tap or press Space to drop a block. M mutes the sound.",
+  "tags": ["computer science"],
+  "thumbnail": "thumbnail.png"
+}

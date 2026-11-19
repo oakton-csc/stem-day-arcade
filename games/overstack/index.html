@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Overstack</title>
+  <style>
+    :root {
+      --bg: #1a1c2c;
+      --panel: #29366f;
+      --edge: #f4f4f4;
+      --shadow: #0d0e17;
+      --text: #94b0c2;
+      --bright: #f4f4f4;
+      --accent: #ffcd75;
+    }
+    body {
+      margin: 0;
+      padding: 24px 16px 40px;
+      background: var(--bg);
+      color: var(--text);
+      font: 13px/1.6 ui-monospace, Menlo, Consolas, monospace;
+      text-align: center;
+    }
+    #game { max-width: 480px; margin: 0 auto; }
+    .controls { margin: 16px 0 0; }
+    kbd { color: var(--bright); }
+
+    /* club credits card: flat colours, hard pixel border + offset shadow */
+    .credits {
+      max-width: 420px;
+      margin: 36px auto 0;
+      padding: 20px 20px 18px;
+      background: var(--panel);
+      border: 4px solid var(--edge);
+      box-shadow: 6px 6px 0 var(--shadow);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .credits .made { margin: 0; color: var(--text); font-size: 11px; }
+    .credits h2 {
+      margin: 4px 0 12px;
+      color: var(--accent);
+      font-size: 22px;
+      line-height: 1.2;
+      letter-spacing: 0.08em;
+      text-shadow: 3px 3px 0 var(--shadow);
+    }
+    .credits .rule {
+      height: 4px;
+      margin: 0 auto 12px;
+      width: 60%;
+      background: repeating-linear-gradient(90deg, var(--edge) 0 8px, transparent 8px 12px);
+    }
+    .credits p { margin: 6px 0 0; color: var(--bright); font-size: 12px; }
+    .credits .ask { color: var(--accent); margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div id="game"></div>
+  <p class="controls"><kbd>TAP</kbd> / <kbd>CLICK</kbd> / <kbd>SPACE</kbd> to drop &middot; <kbd>M</kbd> to mute</p>
+
+  <section class="credits" aria-label="Credits">
+    <p class="made">Made by the</p>
+    <h2>Oakton CS Club</h2>
+    <div class="rule" aria-hidden="true"></div>
+    <p>Written in plain JavaScript.</p>
+    <p>Every pixel, sound and song is generated in code.</p>
+    <p class="ask">Ask us how it works!</p>
+  </section>
+
+  <script src="overstack.js"></script>
+  <script>
+    // keys: 'window' so Space works as soon as the arcade opens the game
+    Overstack.mount('#game', { keys: 'window' });
+  </script>
+</body>
+</html>

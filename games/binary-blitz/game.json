@@ -4,5 +4,6 @@
   "github": "oakton-csc",
   "description": "Flip the bits to build each number in binary before the clock runs out.",
   "controls": "Click a bit or press keys 1–8 to flip it. Enter skips a number.",
-  "tags": ["computer engineering", "math"]
+  "tags": ["computer engineering", "math"],
+  "thumbnail": "thumbnail.png"
 }

@@ -90,4 +90,6 @@ if (problems.length) {
 
 games.sort((a, b) => a.title.localeCompare(b.title));
 await writeFile(join(root, "games.json"), JSON.stringify(games, null, 2) + "\n");
-console.log(`games.json written with ${games.length} game${games.length === 1 ? "" : "s"}.`);
+// Same list as a script, so index.html also works when opened straight from disk.
+await writeFile(join(root, "games.js"), "window.ARCADE_GAMES = " + JSON.stringify(games, null, 2) + ";\n");
+console.log(`games.json and games.js written with ${games.length} game${games.length === 1 ? "" : "s"}.`);

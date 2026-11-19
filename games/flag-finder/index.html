@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flag Finder</title>
+<style>
+  /* Web version of the club's Minecraft Education flag finder.
+     Everything lives in this one file: no libraries, no network. */
+  :root {
+    --bg: #0d1a17;
+    --panel: #14271f;
+    --panel-2: #1c3529;
+    --ink: #f1f6f2;
+    --dim: #a9c2b6;
+    --gold: #f7c948;
+    --mint: #5fd6bd;
+    --red: #e2483d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: grid; place-items: center; padding: 12px;
+  }
+  main { width: min(1180px, 100%); display: grid; gap: 12px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; }
+  h1 { margin: 0; font-size: 1.7rem; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--dim); }
+  .boards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  figure { margin: 0; background: var(--panel); padding: 10px; display: grid; gap: 8px; }
+  figcaption { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
+  figcaption span { color: var(--dim); font-weight: 500; }
+  canvas { width: min(100%, 52vh); margin: 0 auto; aspect-ratio: 1; display: block; image-rendering: pixelated; background: #9bd3ff; }
+  #mountain { cursor: crosshair; }
+  .hud { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
+  .say { background: var(--panel); padding: 14px 16px; display: grid; gap: 10px; align-content: start; min-height: 190px; }
+  .say .step { color: var(--gold); font-weight: 800; }
+  .say p { margin: 0; font-size: 1.08rem; }
+  pre { margin: 0; padding: 10px 12px; background: #08120f; color: #d7e6de; font: 13px/1.5 Consolas, ui-monospace, monospace; overflow: auto; max-height: 150px; white-space: pre; }
+  .side { background: var(--panel); padding: 14px 16px; display: grid; gap: 12px; align-content: start; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .count { font-size: 1.05rem; }
+  .count b { font-size: 1.6rem; color: var(--gold); font-variant-numeric: tabular-nums; }
+  .bits { display: flex; gap: 4px; align-items: center; font-variant-numeric: tabular-nums; }
+  .bits label { width: 22px; font-weight: 800; }
+  #bx, #by { display: flex; gap: 4px; }
+  .bit { width: 30px; height: 34px; display: grid; place-items: center; background: var(--panel-2); font-weight: 800; }
+  .bit small { display: block; font-size: 10px; color: var(--dim); font-weight: 600; line-height: 1; }
+  .bit.one { background: var(--gold); color: #2a1f00; }
+  .bit.one small { color: #5c4500; }
+  .bit.zero { background: #2b4a3d; }
+  .bits output { margin-left: 8px; font-weight: 800; min-width: 3ch; }
+  button {
+    appearance: none; border: 0; cursor: pointer; font: inherit; font-weight: 800;
+    background: var(--gold); color: #2a1f00; padding: 10px 16px;
+  }
+  button.quiet { background: var(--panel-2); color: var(--ink); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, .chip:focus-visible, canvas:focus-visible, summary:focus-visible { outline: 3px solid var(--mint); outline-offset: 2px; }
+  details { background: var(--panel); padding: 10px 16px; }
+  summary { cursor: pointer; font-weight: 800; }
+  details pre { max-height: 360px; margin-top: 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { appearance: none; border: 0; cursor: pointer; font: 12px/1 Consolas, ui-monospace, monospace; padding: 6px 8px; background: #2b4a3d; color: var(--ink); }
+  .chip[aria-pressed="false"] { background: transparent; color: var(--dim); text-decoration: line-through; box-shadow: inset 0 0 0 1px #3c5c4e; }
+  .chip.flash { background: var(--mint); color: #062018; }
+  .note { color: var(--dim); font-size: .92rem; margin: 0; }
+  .overlay { position: fixed; inset: 0; background: rgba(6, 14, 12, .93); display: grid; place-items: center; padding: 16px; z-index: 5; }
+  .overlay[hidden] { display: none; }
+  .card { max-width: 560px; display: grid; gap: 14px; }
+  .card h2 { margin: 0; font-size: 2.2rem; }
+  .card p { margin: 0; color: var(--dim); }
+  .card p b { color: var(--ink); }
+  .card .by { color: var(--gold); font-weight: 800; }
+  .card button { justify-self: start; font-size: 1.15rem; padding: 14px 26px; }
+  @media (max-width: 820px) {
+    .boards, .hud { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Flag Finder</h1>
+    <p>By Oakton CSC, from the club’s Minecraft Education code</p>
+  </header>
+
+  <div class="boards">
+    <figure>
+      <figcaption>The mountain <span id="m-note">click a block to hide the flag</span></figcaption>
+      <canvas id="mountain" width="512" height="512" tabindex="0" aria-label="The mountain. Click a block to hide the flag there."></canvas>
+    </figure>
+    <figure>
+      <figcaption>The copy high in the sky <span id="s-note">where the finder works</span></figcaption>
+      <canvas id="sky" width="512" height="512" aria-label="The copy in the sky where the finder works"></canvas>
+    </figure>
+  </div>
+
+  <div class="hud">
+    <div class="say" aria-live="polite">
+      <span class="step" id="step">Hide the flag</span>
+      <p id="say">Click any block in the mountain to hide the flag there, or press R to hide it somewhere random.</p>
+      <pre id="code" aria-label="The part of the Minecraft code doing this step"></pre>
+    </div>
+    <div class="side">
+      <div class="row">
+        <button id="run" disabled>Run the finder</button>
+        <button class="quiet" id="random">Hide at random (R)</button>
+        <button class="quiet" id="skip" disabled>Faster</button>
+      </div>
+      <div class="count">Single-block tests: <b id="tests">0</b> <span class="note" id="vs">Checking every block one by one could take 1,024.</span></div>
+      <div class="bits" aria-label="X position in binary"><label>X</label><span id="bx"></span><output id="ox">?</output></div>
+      <div class="bits" aria-label="Y position in binary"><label>Y</label><span id="by"></span><output id="oy">?</output></div>
+      <div>
+        <p class="note">Blocks the finder knows (MOUNTAIN_BLOCKS in the code). Click one to take it off the list and see what happens.</p>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="row">
+        <button class="quiet" id="again" hidden>New mountain</button>
+        <button class="quiet" id="same" hidden>Same mountain again</button>
+      </div>
+    </div>
+  </div>
+
+  <details>
+    <summary>The Minecraft Education code (MakeCode Python)</summary>
+    <p class="note" style="margin-top:8px">In Minecraft Education, press C, start a new Python project, paste this in, press Hide Flag, set MODE and press Play. The real version works in 3D on 64 × 64 × 64 cubes, so it needs 19 tests per cube instead of 11.</p>
+    <pre id="full"></pre>
+  </details>
+</main>
+
+<div class="overlay" id="start">
+  <div class="card">
+    <h2>Flag Finder</h2>
+    <span class="by">By Oakton CSC</span>
+    <p>Somewhere inside a mountain is one block that doesn’t belong: the flag. Checking every block one at a time takes forever. This trick finds it in a handful of tests.</p>
+    <p><b>How to play:</b> click a block to hide the flag (or press R), then press <b>Run the finder</b> and watch. It copies every normal block onto a slab of gold, folds the leftover gold into one corner, and reads the flag’s position in binary.</p>
+    <button id="go">Start</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const N = 32;                 // the cube is 32 × 32 here (the Minecraft version is 64 × 64 × 64)
+  const PX = 512 / N;           // pixels per block on the canvas
+
+  // Block types, using the names from the Minecraft code
+  const T = {
+    AIR: 0, STONE: 1, DIRT: 2, GRASS: 3, COARSE_DIRT: 4, GRAVEL: 5, SAND: 6, LOG_OAK: 7, LOG_BIRCH: 8,
+    LEAVES_OAK: 9, LEAVES_BIRCH: 10, WATER: 11, COAL_ORE: 12, IRON_ORE: 13, GOLD_ORE: 14, DIAMOND_ORE: 15,
+    REDSTONE_ORE: 16, LAPIS_ORE: 17, EMERALD_ORE: 18, FLAG: 19, GOLD_BLOCK: 20,
+  };
+  const NAME = Object.fromEntries(Object.entries(T).map(([k, v]) => [v, k]));
+  const MOUNTAIN_BLOCKS = [T.AIR, T.STONE, T.DIRT, T.GRASS, T.COARSE_DIRT, T.GRAVEL, T.SAND, T.LOG_OAK, T.LOG_BIRCH,
+    T.LEAVES_OAK, T.LEAVES_BIRCH, T.WATER, T.COAL_ORE, T.IRON_ORE, T.GOLD_ORE, T.DIAMOND_ORE, T.REDSTONE_ORE, T.LAPIS_ORE, T.EMERALD_ORE];
+  const known = new Set(MOUNTAIN_BLOCKS);
+
+  // The Minecraft code, shown step by step and in full
+  const CODE = {
+    fill: `# Step 1: fill the sky cube with gold (8 fills of 32 x 32 x 32).
+def fill_gold(ox, oy, oz):
+    ...
+                blocks.fill(GOLD_BLOCK, world(ox + x, oy + y, oz + z),
+                            world(ox + x + 31, oy + y + 31, oz + z + 31),
+                            FillOperation.REPLACE)`,
+    stamp: `# Step 2: copy each known block type from the mountain cube onto the gold.
+def stamp_known(mx, my, mz, ox, oy, oz):
+    for block in MOUNTAIN_BLOCKS:
+        blocks.clone_filtered(world(mx, my, mz),
+                              world(mx + 63, my + 63, mz + 63),
+                              world(ox, oy, oz), block, CloneMode.NORMAL)`,
+    left: `#   3. Any gold still left marks a position where the mountain holds
+#      something that is NOT on the list: the flag.`,
+    foldY: `    h = 32
+    while h >= 1:      # fold top half onto bottom half, whole cube
+        blocks.clone_filtered(world(ox, oy + h, oz),
+                              world(ox + 63, oy + 2 * h - 1, oz + 63),
+                              world(ox, oy, oz), GOLD_BLOCK, CloneMode.NORMAL)
+        h = Math.idiv(h, 2)`,
+    foldX: `    h = 32
+    while h >= 1:      # fold along X, bottom row only
+        blocks.clone_filtered(world(ox + h, oy, oz),
+                              world(ox + 2 * h - 1, oy, oz),
+                              world(ox, oy, oz), GOLD_BLOCK, CloneMode.NORMAL)
+        h = Math.idiv(h, 2)`,
+    corner: `    fold(ox, oy, oz)
+    if blocks.test_for_block(GOLD_BLOCK, world(ox, oy, oz)):
+        read_position(mx, my, mz, ox, oy, oz)
+        return True`,
+    readX: `    dx = 0
+    k = 1
+    while k <= 32:
+        if blocks.test_for_block(GOLD_BLOCK, world(ox + dx + k, oy, oz)):
+            dx += k
+        k = k * 2`,
+    readY: `    dy = 0
+    k = 1
+    while k <= 32:
+        if blocks.test_for_block(GOLD_BLOCK,
+                                 world(ox + dx, oy + dy + k, oz + dz)):
+            dy += k
+        k = k * 2`,
+    stand: `        # Clear a 3 x 3 x 2 space above the block and stand on top of it.
+        blocks.fill(AIR, world(fx - 1, fy + 1, fz - 1),
+                    world(fx + 1, fy + 2, fz + 1), FillOperation.REPLACE)
+        player.teleport(world(fx, fy + 1, fz))`,
+  };
+
+  // ---------- Drawing ----------
+  const COLOR = {
+    [T.AIR]: "#9bd3ff", [T.STONE]: "#7f8487", [T.DIRT]: "#8b5a2b", [T.GRASS]: "#5bae3f", [T.COARSE_DIRT]: "#6f4a27",
+    [T.GRAVEL]: "#8f8a86", [T.SAND]: "#dccf8f", [T.LOG_OAK]: "#6b4a2a", [T.LOG_BIRCH]: "#e4e0d2", [T.LEAVES_OAK]: "#3f8a2e",
+    [T.LEAVES_BIRCH]: "#6aa84f", [T.WATER]: "#3d74d9", [T.FLAG]: "#e2483d", [T.GOLD_BLOCK]: "#f7c948",
+  };
+  const ORE = { [T.COAL_ORE]: "#222", [T.IRON_ORE]: "#d9a77e", [T.GOLD_ORE]: "#f2d33c", [T.DIAMOND_ORE]: "#5fe3e0",
+    [T.REDSTONE_ORE]: "#d72a1f", [T.LAPIS_ORE]: "#2747b8", [T.EMERALD_ORE]: "#25c45a" };
+
+  function drawBlock(ctx, t, x, y, seed) {
+    const px = x * PX, py = (N - 1 - y) * PX, s = PX;
+    if (ORE[t]) {
+      ctx.fillStyle = COLOR[T.STONE]; ctx.fillRect(px, py, s, s);
+      ctx.fillStyle = ORE[t];
+      ctx.fillRect(px + 3, py + 3, 4, 4); ctx.fillRect(px + 9, py + 7, 4, 4); ctx.fillRect(px + 4, py + 10, 3, 3);
+      return;
+    }
+    ctx.fillStyle = COLOR[t] ?? "#f0f"; ctx.fillRect(px, py, s, s);
+    if (t === T.GRASS) { ctx.fillStyle = COLOR[T.DIRT]; ctx.fillRect(px, py + 5, s, s - 5); }
+    else if (t === T.GRAVEL || t === T.STONE || t === T.COARSE_DIRT) { ctx.fillStyle = "rgba(0,0,0,.16)"; ctx.fillRect(px + ((seed * 7) % 11), py + ((seed * 3) % 11), 3, 3); }
+    else if (t === T.LOG_OAK || t === T.LOG_BIRCH) { ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.fillRect(px + 4, py, 2, s); ctx.fillRect(px + 10, py, 2, s); }
+    else if (t === T.LEAVES_OAK || t === T.LEAVES_BIRCH) { ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.fillRect(px, py, 8, 8); ctx.fillRect(px + 8, py + 8, 8, 8); }
+    else if (t === T.GOLD_BLOCK) { ctx.fillStyle = "#ffe48a"; ctx.fillRect(px + 2, py + 2, s - 8, 3); ctx.fillStyle = "#c99a1a"; ctx.fillRect(px, py + s - 3, s, 3); }
+    else if (t === T.FLAG) { ctx.fillStyle = COLOR[T.AIR]; ctx.fillRect(px, py, s, s); ctx.fillStyle = "#4a3a2a"; ctx.fillRect(px + 3, py + 1, 2, s - 1); ctx.fillStyle = COLOR[T.FLAG]; ctx.fillRect(px + 5, py + 2, 9, 7); ctx.fillStyle = "#fff"; ctx.fillRect(px + 8, py + 4, 3, 3); }
+    else if (t === T.WATER) { ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.fillRect(px + 2, py + 4, 6, 2); }
+  }
+
+  const mCtx = document.getElementById("mountain").getContext("2d");
+  const sCtx = document.getElementById("sky").getContext("2d");
+  let mountain, original, sky, flag = null, player = null, marks = [];
+
+  function render() {
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) drawBlock(mCtx, mountain[x][y], x, y, x * 31 + y);
+    if (player) {
+      const px = player.x * PX, py = (N - 1 - player.y) * PX;
+      mCtx.fillStyle = "#c68d5e"; mCtx.fillRect(px + 3, py - PX + 2, PX - 6, PX - 4);     // head
+      mCtx.fillStyle = "#2fa6a8"; mCtx.fillRect(px + 2, py, PX - 4, PX - 6);              // shirt
+      mCtx.fillStyle = "#3b3f8f"; mCtx.fillRect(px + 3, py + PX - 6, PX - 6, 6);          // legs
+    }
+    if (sky) for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) drawBlock(sCtx, sky[x][y], x, y, x * 31 + y);
+    else { sCtx.fillStyle = "#16324a"; sCtx.fillRect(0, 0, 512, 512); }
+    for (const m of marks) {
+      const ctx = m.on === "m" ? mCtx : sCtx;
+      ctx.fillStyle = m.fill || "rgba(95,214,189,.28)";
+      ctx.fillRect(m.x * PX, (N - m.y - m.h) * PX, m.w * PX, m.h * PX);
+      if (m.ring) { ctx.strokeStyle = m.ring; ctx.lineWidth = 3; ctx.strokeRect(m.x * PX + 1.5, (N - m.y - m.h) * PX + 1.5, m.w * PX - 3, m.h * PX - 3); }
+    }
+  }
+
+  // ---------- The mountain ----------
+  function rng(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
+  function makeMountain(seed) {
+    const r = rng(seed);
+    const g = Array.from({ length: N }, () => new Array(N).fill(T.AIR));
+    const p1 = r() * 6, p2 = r() * 6;
+    const top = [];
+    for (let x = 0; x < N; x++) top[x] = Math.round(17 + 6 * Math.exp(-(((x - 16) / 7) ** 2)) + 2.2 * Math.sin(x / 4.5 + p1) + 1.2 * Math.sin(x / 2.1 + p2));
+    const water = Math.min(...top) + 1;
+    for (let x = 0; x < N; x++) {
+      for (let y = 0; y <= top[x]; y++) {
+        let t = T.STONE;
+        if (y === top[x]) t = top[x] <= water ? T.SAND : r() < 0.12 ? T.COARSE_DIRT : T.GRASS;
+        else if (y > top[x] - 4) t = top[x] <= water ? T.SAND : T.DIRT;
+        else {
+          const d = r();
+          if (d < 0.07) t = T.COAL_ORE; else if (d < 0.11) t = T.IRON_ORE; else if (d < 0.15) t = T.GRAVEL;
+          else if (y < 7 && d < 0.17) t = T.REDSTONE_ORE; else if (y < 7 && d < 0.185) t = T.LAPIS_ORE;
+          else if (y < 9 && d < 0.2) t = T.GOLD_ORE; else if (y < 5 && d < 0.21) t = T.DIAMOND_ORE; else if (y < 6 && d < 0.215) t = T.EMERALD_ORE;
+        }
+        g[x][y] = t;
+      }
+      for (let y = top[x] + 1; y <= water; y++) g[x][y] = T.WATER;
+    }
+    // A few trees on the grass
+    for (const tx of [4 + Math.floor(r() * 5), 13 + Math.floor(r() * 5), 23 + Math.floor(r() * 5)]) {
+      if (g[tx][top[tx]] !== T.GRASS) continue;
+      const birch = r() < 0.5, log = birch ? T.LOG_BIRCH : T.LOG_OAK, leaves = birch ? T.LEAVES_BIRCH : T.LEAVES_OAK;
+      for (let y = top[tx] + 1; y <= top[tx] + 3 && y < N; y++) g[tx][y] = log;
+      for (let x = tx - 2; x <= tx + 2; x++) for (let y = top[tx] + 4; y <= top[tx] + 5; y++)
+        if (x >= 0 && x < N && y < N && !(Math.abs(x - tx) === 2 && y === top[tx] + 5)) g[x][y] = leaves;
+    }
+    return g;
+  }
+  const copy = (g) => g.map((c) => c.slice());
+
+  // ---------- Interface ----------
+  const $ = (id) => document.getElementById(id);
+  const say = (step, text, code) => { $("step").textContent = step; $("say").textContent = text; $("code").textContent = code || ""; };
+  let speed = 1, running = false, tests = 0, seed = 1;
+  const wait = (ms) => new Promise((ok) => setTimeout(ok, ms / speed));
+
+  function bitsUI() {
+    for (const id of ["bx", "by"]) $(id).innerHTML = [16, 8, 4, 2, 1].map((k) => `<span class="bit" data-k="${k}">?<small>${k}</small></span>`).join("");
+    $("ox").textContent = "?"; $("oy").textContent = "?";
+  }
+  function setBit(axis, k, one) { const b = $(axis).querySelector(`[data-k="${k}"]`); b.classList.add(one ? "one" : "zero"); b.firstChild.textContent = one ? "1" : "0"; }
+  function chipsUI() {
+    $("chips").innerHTML = MOUNTAIN_BLOCKS.map((t) => `<button class="chip" type="button" data-t="${t}" aria-pressed="${known.has(t)}">${NAME[t]}</button>`).join("");
+  }
+  $("chips").addEventListener("click", (e) => {
+    const c = e.target.closest(".chip"); if (!c || running) return;
+    const t = Number(c.dataset.t); known.has(t) ? known.delete(t) : known.add(t);
+    c.setAttribute("aria-pressed", String(known.has(t)));
+  });
+
+  function newRound(sameMountain) {
+    if (!sameMountain) { seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0; original = makeMountain(seed); }
+    mountain = copy(original); sky = null; flag = null; player = null; marks = []; tests = 0;
+    $("tests").textContent = "0"; $("vs").textContent = "Checking every block one by one could take 1,024.";
+    $("run").disabled = true; $("skip").disabled = true; $("random").disabled = false;
+    $("again").hidden = true; $("same").hidden = true; $("m-note").textContent = "click a block to hide the flag";
+    bitsUI();
+    say("Hide the flag", "Click any block in the mountain to hide the flag there, or press R to hide it somewhere random.", "");
+    render();
+  }
+
+  function hideAt(x, y) {
+    if (running || player) return;
+    mountain = copy(original); mountain[x][y] = T.FLAG; flag = { x, y };
+    $("run").disabled = false; $("m-note").textContent = `flag hidden at (${x}, ${y})`;
+    say("Flag hidden", `The flag is at X ${x}, Y ${y}. The finder can’t see it. Press Run the finder (or Enter) and see whether it can work out where it is.`, "");
+    render();
+  }
+  function hideRandom() {
+    if (running || player) return;
+    const inside = [];
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (original[x][y] === T.STONE || original[x][y] === T.DIRT) inside.push([x, y]);
+    const [x, y] = inside[(Math.random() * inside.length) | 0];
+    hideAt(x, y);
+  }
+  $("mountain").addEventListener("click", (e) => {
+    const r = e.target.getBoundingClientRect();
+    const x = Math.floor((e.clientX - r.left) / r.width * N), y = N - 1 - Math.floor((e.clientY - r.top) / r.height * N);
+    if (x >= 0 && x < N && y >= 0 && y < N) hideAt(x, y);
+  });
+  $("random").addEventListener("click", hideRandom);
+  $("run").addEventListener("click", () => run());
+  $("skip").addEventListener("click", () => { speed = speed === 1 ? 6 : 1; $("skip").textContent = speed === 1 ? "Faster" : "Normal speed"; });
+  $("again").addEventListener("click", () => newRound(false));
+  $("same").addEventListener("click", () => newRound(true));
+  addEventListener("keydown", (e) => {
+    if ($("start").hidden === false) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("go").click(); } return; }
+    if (e.key === "r" || e.key === "R") hideRandom();
+    else if (e.key === "Enter" && !$("run").disabled) run();
+  });
+
+  // ---------- The finder, one step at a time ----------
+  async function test(x, y, axis, k) {
+    tests++; $("tests").textContent = String(tests);
+    const hit = sky[x][y] === T.GOLD_BLOCK;
+    marks = [{ x, y, w: 1, h: 1, fill: "rgba(0,0,0,0)", ring: hit ? "#ffffff" : "#e2483d" }];
+    $("say").textContent = `test_for_block(GOLD_BLOCK, ${x}, ${y}) → ${hit ? "gold, so this binary digit is 1" : "no gold, so this binary digit is 0"}`;
+    if (axis) setBit(axis, k, hit);
+    render(); await wait(650);
+    return hit;
+  }
+
+  async function run(opts = {}) {
+    if (running || !flag) return;
+    running = true; tests = 0; player = null;
+    $("run").disabled = true; $("random").disabled = true; $("skip").disabled = false; $("again").hidden = true; $("same").hidden = true;
+    $("chips").querySelectorAll(".chip").forEach((c) => { c.disabled = true; });
+    bitsUI();
+
+    // Step 1: gold, in four quarters (the Minecraft version uses eight 32-block fills)
+    sky = Array.from({ length: N }, () => new Array(N).fill(T.AIR));
+    say("Step 1 of 6: fill the copy with gold", "Build a cube the same size as the mountain cube high in the sky, and fill it with gold blocks.", CODE.fill);
+    for (const [qx, qy] of [[0, 0], [16, 0], [0, 16], [16, 16]]) {
+      for (let x = qx; x < qx + 16; x++) for (let y = qy; y < qy + 16; y++) sky[x][y] = T.GOLD_BLOCK;
+      marks = [{ x: qx, y: qy, w: 16, h: 16, fill: "rgba(255,255,255,.18)" }]; render(); await wait(380);
+    }
+    marks = []; render(); await wait(400);
+
+    // Step 2: stamp every known block type onto the gold
+    say("Step 2 of 6: copy every normal block onto the gold", "For each block type the mountain is made of, copy just that type onto the gold. Each copy replaces the gold in the same place.", CODE.stamp);
+    let stamped = 0;
+    for (const t of MOUNTAIN_BLOCKS) {
+      if (!known.has(t)) continue;
+      const chip = $("chips").querySelector(`[data-t="${t}"]`); chip.classList.add("flash");
+      let any = false;
+      for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (mountain[x][y] === t) { sky[x][y] = t; any = true; }
+      $("say").textContent = `blocks.clone_filtered(…, ${NAME[t]}, …)${any ? "" : ": none in this mountain"}`;
+      render(); await wait(any ? 420 : 90);
+      chip.classList.remove("flash");
+      stamped++;
+      if (opts.stopAfterStamps && stamped >= opts.stopAfterStamps) { running = false; return; }
+    }
+
+    // Step 3: what's left
+    const left = [];
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (sky[x][y] === T.GOLD_BLOCK) left.push([x, y]);
+    say("Step 3 of 6: look at the leftover gold", left.length === 1
+      ? "Exactly one gold block is left. It sits where the mountain has something that isn’t on the list: the flag. But the finder still can’t see where it is; it can only test one block at a time."
+      : `${left.length} gold blocks are left, because some block types aren’t on the list any more. The finder can’t tell them apart, so watch what happens.`, CODE.left);
+    marks = left.slice(0, 200).map(([x, y]) => ({ x, y, w: 1, h: 1, fill: "rgba(0,0,0,0)", ring: "#ffffff" }));
+    render(); await wait(1800);
+
+    // Step 4: fold the gold into the corner
+    say("Step 4 of 6: fold the gold into the corner", "Copy only the gold from the top half onto the bottom half, then halve again, five times. Then do the same sideways along the bottom row.", CODE.foldY);
+    for (let h = N / 2; h >= 1; h /= 2) {
+      marks = [{ x: 0, y: h, w: N, h, fill: "rgba(95,214,189,.32)" }, { x: 0, y: 0, w: N, h, fill: "rgba(247,201,72,.18)" }];
+      $("say").textContent = `Copy the gold in rows ${h}–${2 * h - 1} down onto rows 0–${h - 1}.`;
+      render(); await wait(700);
+      for (let x = 0; x < N; x++) for (let y = h; y < 2 * h; y++) if (sky[x][y] === T.GOLD_BLOCK) sky[x][y - h] = T.GOLD_BLOCK;
+      render(); await wait(350);
+    }
+    $("code").textContent = CODE.foldX;
+    for (let h = N / 2; h >= 1; h /= 2) {
+      marks = [{ x: h, y: 0, w: h, h: 1, fill: "rgba(95,214,189,.5)" }, { x: 0, y: 0, w: h, h: 1, fill: "rgba(247,201,72,.3)" }];
+      $("say").textContent = `On the bottom row, copy the gold in columns ${h}–${2 * h - 1} onto columns 0–${h - 1}.`;
+      render(); await wait(650);
+      for (let x = h; x < 2 * h; x++) if (sky[x][0] === T.GOLD_BLOCK) sky[x - h][0] = T.GOLD_BLOCK;
+      render(); await wait(300);
+    }
+
+    // Step 5: one test tells us whether anything is in this cube
+    say("Step 5 of 6: test one block", "If any gold was left anywhere, the folding pushed a copy into the corner. One test answers “is the flag in this cube?”", CODE.corner);
+    await wait(500);
+    const inCube = await test(0, 0);
+    if (!inCube) { finish(null); return; }
+    $("say").textContent = "Gold in the corner: the flag is in this cube. Now the folded copies spell out where.";
+    await wait(900);
+
+    // Step 6: read X then Y, one binary digit per test
+    say("Step 6 of 6: read the position in binary", "Each fold left copies of the gold at positions that spell the flag’s coordinates in binary. Test 1, 2, 4, 8 and 16 steps along.", CODE.readX);
+    let dx = 0;
+    for (let k = 1; k < N; k *= 2) if (await test(dx + k, 0, "bx", k)) dx += k;
+    $("ox").textContent = `= ${dx}`;
+    $("code").textContent = CODE.readY;
+    let dy = 0;
+    for (let k = 1; k < N; k *= 2) if (await test(dx, dy + k, "by", k)) dy += k;
+    $("oy").textContent = `= ${dy}`;
+    marks = []; render(); await wait(400);
+    finish({ x: dx, y: dy });
+  }
+
+  async function finish(found) {
+    $("skip").disabled = true;
+    if (!found) {
+      say("Nothing found", "No gold reached the corner, so nothing unusual is in this cube. In Minecraft the finder would move on to the next cube.", "");
+    } else {
+      // As in the Minecraft code: clear a space above the block and stand on it
+      $("code").textContent = CODE.stand;
+      for (let x = found.x - 1; x <= found.x + 1; x++) for (let y = found.y + 1; y <= found.y + 2; y++)
+        if (x >= 0 && x < N && y < N) mountain[x][y] = T.AIR;
+      player = { x: found.x, y: Math.min(N - 2, found.y + 1) };
+      marks = [{ on: "m", x: found.x, y: found.y, w: 1, h: 1, fill: "rgba(0,0,0,0)", ring: "#ffffff" }];
+      render();
+      const what = original[found.x][found.y], hidOn = flag && found.x === flag.x && found.y === flag.y;
+      if (hidOn) {
+        say("Found the flag!", `The finder is standing on the flag at X ${found.x}, Y ${found.y}, after only ${tests} single-block tests. Checking every block could have taken up to 1,024.`, CODE.stand);
+        $("vs").textContent = `The Minecraft version does it in 3D: 19 tests per 64 × 64 × 64 cube instead of up to 262,144.`;
+      } else if (!known.has(what) && what !== T.FLAG) {
+        say(`Found ${NAME[what]}, not the flag`, `${NAME[what]} isn’t on the list, so the finder treated it like the flag. The code’s tip: if the search lands on a block that isn’t the flag, add that block type to MOUNTAIN_BLOCKS.`, CODE.stand);
+      } else {
+        say("Found the wrong spot", `With more than one gold block left over, the folded copies mix together and spell out a position that isn’t really odd (here, ${NAME[what]}). That’s why every block in the mountain has to be on the list.`, CODE.stand);
+      }
+      $("m-note").textContent = `the finder stopped at (${found.x}, ${found.y})`;
+    }
+    running = false;
+    $("again").hidden = false; $("same").hidden = false; $("random").disabled = true;
+    $("chips").querySelectorAll(".chip").forEach((c) => { c.disabled = false; });
+    $("again").focus();
+  }
+
+  // ---------- Start ----------
+  // The full Minecraft code sits at the end of the page, so fill it in once the page has loaded
+  addEventListener("DOMContentLoaded", () => { $("full").textContent = $("fazle-code").textContent.trim(); });
+  chipsUI(); newRound(false);
+  $("go").addEventListener("click", () => { $("start").hidden = true; $("mountain").focus(); });
+  $("go").focus();
+
+  // ?shot makes the cover picture for the arcade: mid-way through step 2
+  if (new URLSearchParams(location.search).has("shot")) {
+    $("start").hidden = true; original = makeMountain(7); newRound(true); hideAt(21, 8); speed = 1000;
+    run({ stopAfterStamps: 4 });
+  }
+})();
+</script>
+
+<script type="text/plain" id="fazle-code">
+# Velocity Prize - marker-map flag finder  (v0.8)
+# MakeCode Python for Minecraft Education (press C > new project > Python)
+#
+# NOTHING in the world is touched before Hide Flag, and the mountain and
+# the flag are never changed or copied. Everything runs after Hide Flag.
+#
+# WHAT WORKS IN THIS WORLD (from the two diagnostics)
+#   works:   blocks.place, blocks.fill, blocks.replace, blocks.clone,
+#            blocks.test_for_block (one block), player.teleport
+#   broken:  blocks.test_for_blocks (regions), player.execute (raw commands)
+#
+# IDEA
+#   For each 64 x 64 x 64 cube of the mountain:
+#   1. Fill a same-sized cube high in the sky with gold.
+#   2. For every block type the mountain is made of (and air), copy just
+#      that type from the mountain cube onto the gold cube. Each copy
+#      overwrites the gold in the matching position.
+#   3. Any gold still left marks a position where the mountain holds
+#      something that is NOT on the list: the flag.
+#   4. Fold the gold cube in half 6 times in each direction, copying only
+#      gold. If any gold was left, it ends up in the cube's corner, so one
+#      single-block test answers "is the flag in this cube?".
+#   5. The folded copies also spell out the position in binary, so 18 more
+#      single-block tests read off the flag's exact X, Y and Z.
+#
+# HOW TO RUN
+#   Press Hide Flag, then set MODE below and press Play.
+#   1 = find the flag and stand on it
+#   2 = teleport back to the start
+
+# ---------------- SETTINGS ----------------
+MODE = 1      # 1 = find flag, 2 = back to start
+
+X1 = -6      # low corner of the search area (corner A, ground minus 3)
+Y1 = -63
+Z1 = -2
+X2 = 210     # high corner (corner B plus 10 margin, peak plus 10)
+Z2 = 210
+LAYERS = 2   # 64-high layers to search: Y -63..0 and Y 1..64
+
+SKY = 200    # the gold cubes are built this far above the mountain cubes
+
+START_X = -18   # where you place the flag to stop the timer
+START_Y = -59
+START_Z = -7
+
+# Every block type the mountain is made of. Anything NOT on this list is
+# treated as the flag. If a name gets a red underline, delete it or pick
+# the right one from autocomplete. If the search lands on a block that is
+# not the flag, add that block type here.
+MOUNTAIN_BLOCKS = [AIR, STONE, DIRT, GRASS, COARSE_DIRT, GRAVEL, SAND,
+                   LOG_OAK, LOG_BIRCH, LEAVES_OAK, LEAVES_BIRCH, WATER,
+                   COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, REDSTONE_ORE,
+                   LAPIS_ORE, EMERALD_ORE]
+
+PLATFORM_Y = 66    # you stand here, above the mountain, below the gold
+LOAD_WAIT = 1000   # milliseconds to wait at each column for it to load
+# -------------------------------------------
+
+fx = 0   # the flag's position, once found
+fy = 0
+fz = 0
+
+
+# Stand on a glass block above the middle of one 64 x 64 column.
+def stand_above(x, z):
+    blocks.place(GLASS, world(x + 32, PLATFORM_Y, z + 32))
+    player.teleport(world(x + 32, PLATFORM_Y + 1, z + 32))
+    loops.pause(LOAD_WAIT)
+
+
+# Step 1: fill the sky cube with gold (8 fills of 32 x 32 x 32).
+def fill_gold(ox, oy, oz):
+    x = 0
+    while x < 64:
+        y = 0
+        while y < 64:
+            z = 0
+            while z < 64:
+                blocks.fill(GOLD_BLOCK, world(ox + x, oy + y, oz + z),
+                            world(ox + x + 31, oy + y + 31, oz + z + 31),
+                            FillOperation.REPLACE)
+                z += 32
+            y += 32
+        x += 32
+
+
+# Step 2: copy each known block type from the mountain cube onto the gold.
+def stamp_known(mx, my, mz, ox, oy, oz):
+    for block in MOUNTAIN_BLOCKS:
+        blocks.clone_filtered(world(mx, my, mz),
+                              world(mx + 63, my + 63, mz + 63),
+                              world(ox, oy, oz), block, CloneMode.NORMAL)
+
+
+# Step 4: fold the gold toward the cube's low corner.
+def fold(ox, oy, oz):
+    h = 32
+    while h >= 1:      # fold top half onto bottom half, whole cube
+        blocks.clone_filtered(world(ox, oy + h, oz),
+                              world(ox + 63, oy + 2 * h - 1, oz + 63),
+                              world(ox, oy, oz), GOLD_BLOCK, CloneMode.NORMAL)
+        h = Math.idiv(h, 2)
+    h = 32
+    while h >= 1:      # fold along Z, bottom layer only
+        blocks.clone_filtered(world(ox, oy, oz + h),
+                              world(ox + 63, oy, oz + 2 * h - 1),
+                              world(ox, oy, oz), GOLD_BLOCK, CloneMode.NORMAL)
+        h = Math.idiv(h, 2)
+    h = 32
+    while h >= 1:      # fold along X, bottom row only
+        blocks.clone_filtered(world(ox + h, oy, oz),
+                              world(ox + 2 * h - 1, oy, oz),
+                              world(ox, oy, oz), GOLD_BLOCK, CloneMode.NORMAL)
+        h = Math.idiv(h, 2)
+
+
+# Step 5: read the position back, one binary digit per test.
+def read_position(mx, my, mz, ox, oy, oz):
+    global fx, fy, fz
+    dx = 0
+    k = 1
+    while k <= 32:
+        if blocks.test_for_block(GOLD_BLOCK, world(ox + dx + k, oy, oz)):
+            dx += k
+        k = k * 2
+    dz = 0
+    k = 1
+    while k <= 32:
+        if blocks.test_for_block(GOLD_BLOCK, world(ox + dx, oy, oz + dz + k)):
+            dz += k
+        k = k * 2
+    dy = 0
+    k = 1
+    while k <= 32:
+        if blocks.test_for_block(GOLD_BLOCK,
+                                 world(ox + dx, oy + dy + k, oz + dz)):
+            dy += k
+        k = k * 2
+    fx = mx + dx
+    fy = my + dy
+    fz = mz + dz
+
+
+# Check one mountain cube. True if something not on the list is inside.
+def check_cube(mx, my, mz):
+    ox = mx
+    oy = my + SKY
+    oz = mz
+    fill_gold(ox, oy, oz)
+    stamp_known(mx, my, mz, ox, oy, oz)
+    fold(ox, oy, oz)
+    if blocks.test_for_block(GOLD_BLOCK, world(ox, oy, oz)):
+        read_position(mx, my, mz, ox, oy, oz)
+        return True
+    return False
+
+
+# Make sure "copy only air" really works before trusting the search:
+# a gold block with air copied onto it must turn into air.
+def self_check(x, z):
+    a = world(x + 34, PLATFORM_Y + 6, z + 32)    # stays air
+    g = world(x + 34, PLATFORM_Y + 8, z + 32)    # gold, should become air
+    blocks.place(AIR, a)
+    blocks.place(GOLD_BLOCK, g)
+    blocks.clone_filtered(a, a, g, AIR, CloneMode.NORMAL)
+    return blocks.test_for_block(AIR, g)
+
+
+def find_flag():
+    first = True
+    x = X1
+    while x <= X2:
+        z = Z1
+        while z <= Z2:
+            stand_above(x, z)
+            if first:
+                first = False
+                if not self_check(x, z):
+                    return False
+            layer = 0
+            while layer < LAYERS:
+                if check_cube(x, Y1 + 64 * layer, z):
+                    return True
+                layer += 1
+            z += 64
+        x += 64
+    return False
+
+
+# ---------------- WHAT HAPPENS WHEN YOU PRESS PLAY ----------------
+#   MODE 1: find. Where you end up tells you the result:
+#     - in a small cleared space inside the mountain: you are standing on
+#       the block the search found (the flag, or a block type to add)
+#     - back at the start beside a 3-high stone pillar: "copy only air"
+#       does not work here, or nothing unusual was found anywhere
+#   MODE 2: back to the start.
+if MODE == 1:
+    if find_flag():
+        # Clear a 3 x 3 x 2 space above the block and stand on top of it.
+        blocks.fill(AIR, world(fx - 1, fy + 1, fz - 1),
+                    world(fx + 1, fy + 2, fz + 1), FillOperation.REPLACE)
+        player.teleport(world(fx, fy + 1, fz))
+    else:
+        blocks.fill(STONE, world(START_X + 2, START_Y, START_Z),
+                    world(START_X + 2, START_Y + 2, START_Z),
+                    FillOperation.REPLACE)
+        player.teleport(world(START_X, START_Y, START_Z))
+elif MODE == 2:
+    player.teleport(world(START_X, START_Y, START_Z))
+</script>
+</body>
+</html>
